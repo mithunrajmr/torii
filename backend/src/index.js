@@ -3,6 +3,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import authRoutes from './routes/authRoutes.js';
 import mobileRoutes from './routes/mobileRoutes.js';
 import tellerRoutes from './routes/tellerRoutes.js';
@@ -34,6 +36,31 @@ app.use((err, req, res, next) => {
   console.error('[TORII Server Error]', err);
   res.status(500).json({ error: 'ERR_INTERNAL_SERVER_ERROR', message: err.message });
 });
+
+// ── Dev-only: generate a TELLER JWT for dashboard testing ─────────────────────
+// Usage: POST /api/dev/teller-token
+// Returns a signed JWT with role=TELLER — paste into browser localStorage or
+// use with any REST client to test the teller dashboard API.
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/api/dev/teller-token', (req, res) => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = jwt.sign(
+      {
+        sub: 'teller-dev-user-0001',
+        name: 'Dev Teller',
+        role: 'TELLER',
+        jti: uuidv4(),
+        iat: now,
+        exp: now + 28800, // 8 hours
+      },
+      process.env.JWT_SECRET || 'torii-secret-key-123456789'
+    );
+    res.json({
+      teller_jwt: token,
+      note: 'Add as Authorization: Bearer <token> header. Valid for 8 hours. Dev mode only.',
+    });
+  });
+}
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {

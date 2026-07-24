@@ -1,0 +1,88 @@
+# TORII — Autonomous Branch Operations & Compliance Engine
+
+An enterprise-grade banking kiosk and mobile triage system for Indian retail banks. Intercepts compliance blocks (e.g. unlinked PAN cards causing failed transactions) and resolves them through an AI agent swarm with Human-in-the-Loop teller approval.
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Copy environment config
+cp .env.example .env   # fill in SUPABASE_DB_URL, REDIS_URL, REDIS_TOKEN, JWT_SECRET, etc.
+
+# Run database migrations
+npm run migrate
+
+# Start development servers (frontend + backend)
+npm run dev
+```
+
+## Running Tests
+
+```bash
+npm test                # full suite
+npm run test:unit       # unit tests only
+npm run test:e2e        # end-to-end tests
+```
+
+## Project Layout
+
+```
+/frontend    React UI — /kiosk, /mobile/:token, /teller workspaces
+/backend     Node.js + Express API Gateway
+/tests       Unit, property-based, component, and E2E tests
+/docs        Requirements, design flowchart, DB schema, UI reference
+/watsonx-orchestrate  IBM watsonx agent & tool definitions
+```
+
+See `docs/requirements.md` for the full feature specification and `docs/Dbscheme-postgres.txt` for the PostgreSQL schema.
+
+## API Routes
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/health` | None | System health check |
+| POST | `/api/auth/otp/request` | None | Request OTP for account number |
+| POST | `/api/auth/otp/verify` | None | Verify OTP, receive kiosk JWT |
+| POST | `/api/auth/qr/generate` | CUSTOMER JWT | Generate QR handoff token |
+| GET | `/api/auth/session/validate` | CUSTOMER JWT | Validate active kiosk session |
+| DELETE | `/api/auth/session` | CUSTOMER JWT | Explicitly terminate kiosk session |
+| POST | `/api/mobile/upload` | QR Token | Upload PAN document via mobile |
+| GET | `/api/mobile/status/:token` | None | Poll ticket status from mobile |
+| GET | `/api/teller/tickets` | TELLER JWT | List pending tickets |
+| POST | `/api/teller/action` | TELLER JWT | Approve or reject a ticket |
+
+## Dev Utilities
+
+### Generate a Teller JWT (non-production only)
+
+When `NODE_ENV` is not `production`, a helper endpoint is available for testing the teller dashboard without going through the full kiosk auth flow:
+
+```bash
+curl -X POST http://localhost:5000/api/dev/teller-token
+```
+
+Response:
+```json
+{
+  "teller_jwt": "<signed JWT with role=TELLER, valid 8 hours>",
+  "note": "Add as Authorization: Bearer <token> header. Valid for 8 hours. Dev mode only."
+}
+```
+
+Use the returned token as `Authorization: Bearer <teller_jwt>` on any `/api/teller/*` endpoint. **This endpoint is disabled in production.**
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPABASE_DB_URL` | Yes | PostgreSQL connection string |
+| `REDIS_URL` | Yes | Upstash Redis REST URL |
+| `REDIS_TOKEN` | Yes | Upstash Redis REST token |
+| `JWT_SECRET` | Yes | Secret for signing kiosk/teller JWTs |
+| `DOMAIN` | Yes | Public domain for QR deep-link URLs |
+| `WATSONX_ORCHESTRATE_API_KEY` | Yes | IBM Cloud IAM API key |
+| `WATSONX_ORCHESTRATE_ENDPOINT` | Yes | watsonx Orchestrate API base URL |
+| `NOTIFICATION_GATEWAY_URL` | Yes | OTP email dispatch service URL |
+| `NODE_ENV` | No | Set to `production` to harden the server |
