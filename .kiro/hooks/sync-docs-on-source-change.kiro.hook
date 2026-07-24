@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Sync Docs on Source Change",
+  "description": "Watches all source files (JS, JSX, SQL, JSON config) and prompts the agent to update the /docs folder or Readme.md to reflect any relevant changes.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.json",
+      "**/*.sql",
+      "**/*.env.example"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A source file was just edited. Review the change and determine if any documentation needs to be updated. If the change affects architecture, API contracts, data models, configuration, or user-facing behavior, update the relevant section in the /docs folder (requirements.md, design.md, tasks.md, or Dbscheme-postgres.txt) or the Readme.md at the project root. Keep docs concise and accurate — only update what has actually changed."
+  }
+}

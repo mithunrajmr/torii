@@ -1,0 +1,36 @@
+-- Core Banking System Simulation
+CREATE TABLE accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    account_number VARCHAR(10) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,  -- added via 002_accounts_add_email.sql; used for OTP dispatch and masked_email response
+    balance DECIMAL(12, 2) DEFAULT 0.00,
+    pan_linked BOOLEAN DEFAULT FALSE,
+    pan_number VARCHAR(10) NULL
+);
+
+-- HITL Teller Queue
+CREATE TYPE ticket_status AS ENUM ('PENDING', 'PENDING_MANUAL_REVIEW', 'APPROVED', 'REJECTED');
+
+CREATE TABLE teller_tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID REFERENCES accounts(id),
+    status ticket_status DEFAULT 'PENDING',
+    document_path VARCHAR(255) NOT NULL,
+    ocr_data JSONB NULL,
+    ai_confidence FLOAT NULL,
+    name_mismatch_score FLOAT NULL,
+    aml_flagged BOOLEAN DEFAULT FALSE,
+    reviewed_by UUID NULL,
+    rejection_reason VARCHAR(255) NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Governance Audit Ledger
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(50) NOT NULL,
+    payload_snapshot JSONB NOT NULL,
+    actor_id UUID NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
