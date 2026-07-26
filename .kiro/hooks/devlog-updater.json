@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "DEVLOG Updater",
+      "trigger": "PostFileSave",
+      "description": "After any source file is saved, prompts Kiro to append a new session entry to DEVLOG.md reflecting the change — keeping architecture, API, migration, and component tables in sync.",
+      "matcher": "\\.(js|jsx|sql|yaml|yml|py|sh)$",
+      "action": {
+        "type": "agent",
+        "prompt": "A source file was just saved. Read DEVLOG.md first, then determine whether the change warrants a DEVLOG update.\n\nUpdate DEVLOG.md if the saved file affects any of the following:\n- A new or modified API endpoint (update the API Endpoints table)\n- A new or modified database migration (update the Database Schema table)\n- A new or modified AI agent, tool, or pipeline step (update the watsonx Orchestrate Agents table or AI Agent Architecture section)\n- A new or modified backend controller, service, route, or middleware\n- A new or modified frontend page or component\n- A new environment variable (update the Environment Variables table)\n- A bug fix that resolves a Known Issues / Gaps entry (mark it ✅ Done)\n\nIf the change warrants an update, append a new entry under \"## Development Session Log\" using the format of the existing session entries. Include: what changed, why, and any remaining TODOs. Do NOT create a new top-level section — append to the existing session log only.\n\nIf the change is trivial (formatting, comments, whitespace only), do nothing."
+      }
+    }
+  ]
+}

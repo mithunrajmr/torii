@@ -710,3 +710,46 @@ addresses can be set — required for OTP delivery to land in the right inbox.
 5. `docs/design.md` has the full Mermaid architecture flowchart (the intended full system).
 6. `docs/requirements.md` has EARS-notation requirements REQ-01 through REQ-06.
 7. All steering/architecture rules are in `structure.md` — especially the PII and Promise.all rules.
+
+---
+
+### Session 9 — DEVLOG Audit + Hook Setup (2026-07-26)
+**Trigger:** Manual "update docs, hook" request. No new feature code written this session.
+Full codebase read performed to verify DEVLOG accuracy against actual files on disk.
+
+**Verification performed:**
+- Read `backend/src/index.js` — matches Session 8 exactly: all 4 route groups wired
+  (`/api/auth`, `/api/mobile`, `/api/teller`, `/api/kiosk`), async health endpoint with
+  live DB + Redis probes, dev-only `/api/dev/teller-token`, startup credential check.
+- Read `backend/src/db/migrations/005_accounts_created_at.sql` — matches Session 8:
+  `created_at` column, back-fill, index, `account_number_seq` table seeded at 7.
+- Read `backend/src/controllers/accountController.js` — matches Session 8: full CRUD,
+  `nextAccountNumber()` atomic increment, `emitAuthEvent` audit on create + update.
+- Confirmed `.kiro/hooks/` already contains `sync-docs-on-source-change.kiro.hook`
+  (old v1 format, `fileEdited` trigger). Replaced with a v2 `PostFileSave` hook (see below).
+
+**What was confirmed as current (no changes needed):**
+- All 5 backend controllers present and correct.
+- All 6 AI modules present (`orchestrateClient`, `visionAgent`, `swarmOrchestrator`,
+  `governanceSidecar`, `faqAgent`, `intentRouter`).
+- All 5 migrations confirmed applied (user verified in prior sessions).
+- Frontend pages: `KioskLogin`, `KioskTriage`, `DocumentUpload`, `StatusPoller`,
+  `Dashboard`, `QueueList`, `SecureImageDisplay`, `ApprovalControls`, `TellerLogin`,
+  `TellerAccounts` — all present.
+- Repository structure table, API endpoint table, and environment variable table in this
+  DEVLOG are all accurate as of Session 8.
+
+**Hook created:** `.kiro/hooks/devlog-updater.json`
+- Trigger: `PostFileSave` on any `.js`, `.jsx`, `.sql`, `.yaml`, `.py`, `.sh` file.
+- Action: agent prompt — instructs Kiro to append a new session entry to DEVLOG.md
+  reflecting the actual change just made, keeping architecture/API/migration tables in sync.
+- Replaces the old `sync-docs-on-source-change.kiro.hook` (which used the deprecated
+  `fileEdited` + `askAgent` format).
+
+**Still needs (carried forward):**
+1. Re-import `bank_faq_tool.py` + `faq-agent/agent.yaml` into watsonx Orchestrate
+   (updated in Session 3, never re-imported — `log_faq_query` tool + new KB entries not live yet).
+2. Auditor role + `/auditor` read-only audit log viewer (deferred).
+3. `ACCOUNT_STATUS` intent → `accountController.js` (deferred — `getAccount` exists but
+   `kioskController.js` does not call it for `ACCOUNT_STATUS` intent yet).
+4. Run `npm run migrate` if fresh Supabase project (applies all 5 migrations).
