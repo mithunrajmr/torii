@@ -2,6 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { FileImage, Lock, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 
+// Re-use the same token helper as Dashboard — reads from localStorage.
+// The token is written there by Dashboard's getTellerToken() on first render,
+// so by the time SecureImageDisplay mounts it will already be available.
+function getTellerAuthHeader() {
+  const token = localStorage.getItem('teller_jwt');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export default function SecureImageDisplay({ ticketId }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,7 +23,9 @@ export default function SecureImageDisplay({ ticketId }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/teller/media/${ticketId}`);
+        const res = await fetch(`/api/teller/media/${ticketId}`, {
+          headers: getTellerAuthHeader(),
+        });
         if (!res.ok) throw new Error('Failed to obtain signed URL');
         const data = await res.json();
         setImageUrl(data.signed_url);

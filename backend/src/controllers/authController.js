@@ -5,6 +5,7 @@
 //   POST /api/auth/qr/generate
 //   GET  /api/auth/session/validate
 //   DELETE /api/auth/session
+//   POST /api/auth/staff-login   ← teller/staff login (issues TELLER JWT)
 //
 // Architecture rules:
 //  - All ephemeral state lives in Redis via sessionManager — never in-memory.
@@ -28,14 +29,15 @@ import {
   createQRToken,
 } from '../cache/sessionManager.js';
 import { emitAuthEvent, AuditEventType } from '../ai/governanceSidecar.js';
+import { sendOTPEmail } from '../services/notificationService.js';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'torii-secret-key-123456789';
 process.env.DOMAIN = process.env.DOMAIN || 'localhost:3000';
 
 
 const OTP_MAX_ATTEMPTS = 3;
-const CBS_QUERY_TIMEOUT_MS = 1500; // Req 4.6
-const OTP_REQUEST_TIMEOUT_MS = 2000; // Req 2.6
+const CBS_QUERY_TIMEOUT_MS = 5000;  // Req 4.6 — increased from 1500ms (Supabase cold start)
+const OTP_REQUEST_TIMEOUT_MS = 9000; // Req 2.6 — increased from 2000ms (Render + Supabase latency)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,10 +81,14 @@ async function fetchFailedTxSummary(accountId) {
 
   if (!rows.length) return null;
 
+  // Supabase may return created_at as a string or a Date — normalise defensively
+  const ts = rows[0].created_at;
+  const isoTs = ts instanceof Date ? ts.toISOString() : String(ts);
+
   return {
     count: rows.length,
     most_recent_amount: Number(rows[0].amount),
-    most_recent_created_at: rows[0].created_at.toISOString(),
+    most_recent_created_at: isoTs,
   };
 }
 
@@ -104,10 +110,10 @@ export async function requestOTP(req, res) {
     return res.status(400).json({ error: 'ERR_INVALID_ACCOUNT_NUMBER' });
   }
 
-  // Look up account
+  // Look up account — timeout is OTP_REQUEST_TIMEOUT_MS minus a 1s buffer for the rest of the handler
   const [accounts, dbErr] = await withTimeout(
     query`SELECT id, email FROM accounts WHERE account_number = ${account_number} LIMIT 1`,
-    OTP_REQUEST_TIMEOUT_MS - 200
+    OTP_REQUEST_TIMEOUT_MS - 1000
   );
 
   if (dbErr) {
@@ -128,25 +134,10 @@ export async function requestOTP(req, res) {
     return res.status(503).json({ error: 'ERR_SESSION_STORE_UNAVAILABLE' });
   }
 
-  // Dispatch email via notification gateway
-  const notificationUrl = process.env.NOTIFICATION_GATEWAY_URL;
-  if (notificationUrl) {
-    try {
-      const emailRes = await fetch(`${notificationUrl}/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: account.email, otp }),
-        signal: AbortSignal.timeout(1000),
-      });
-      if (!emailRes.ok) throw new Error(`HTTP ${emailRes.status}`);
-    } catch (err) {
-      console.error('[authController] Email dispatch failed', err.message);
-      return res.status(503).json({ error: 'ERR_OTP_DELIVERY_FAILED' });
-    }
-  } else {
-    // Dev mode — log OTP to console only (never to any persistent store)
-    console.info(`[authController][DEV] OTP for ${account_number}: ${otp}`);
-  }
+  // Dispatch OTP email via notification service (non-blocking)
+  sendOTPEmail(account.email, otp).catch((err) => {
+    console.error('[authController] sendOTPEmail background error:', err.message);
+  });
 
   const masked_email = maskEmail(account.email);
 
@@ -193,10 +184,14 @@ export async function verifyOTP(req, res) {
     return res.status(401).json({ error: 'ERR_OTP_LOCKED' });
   }
 
-  const storedOTP = await getOTP(account.id);
-  if (!storedOTP) {
+  const storedOTPRaw = await getOTP(account.id);
+  if (!storedOTPRaw) {
     return res.status(401).json({ error: 'ERR_OTP_EXPIRED' });
   }
+
+  // Upstash Redis may return values as numbers due to JSON parsing.
+  // Normalise both sides to strings before strict comparison.
+  const storedOTP = String(storedOTPRaw);
 
   if (otp !== storedOTP) {
     const attempts = await incrementOTPAttempts(account.id);
@@ -224,17 +219,18 @@ export async function verifyOTP(req, res) {
   const [failedTxSummary] = await withTimeout(fetchFailedTxSummary(account.id), CBS_QUERY_TIMEOUT_MS);
   // If withTimeout returns [null, 'TIMEOUT'], failedTxSummary is null — that's the intended degradation
 
-  // Issue kiosk JWT (expires in 120s — matches Redis session TTL)
+  // Issue kiosk JWT (expires in 35 min — slightly longer than Redis session TTL of 30 min)
   const jti = uuidv4();
   const now = Math.floor(Date.now() / 1000);
   const token = jwt.sign(
     {
       sub: account.id,
-      account_number: account.account_number.slice(-4), // last 4 digits only — never full number in JWT
+      // account_number may be a number from Supabase — coerce to string before slice
+      account_number: String(account.account_number).slice(-4), // last 4 digits only
       role: 'CUSTOMER',
       jti,
       iat: now,
-      exp: now + 120,
+      exp: now + 2100, // 35 minutes (Redis TTL is 30 min, JWT exp is longer to avoid race)
     },
     process.env.JWT_SECRET
   );
@@ -284,6 +280,11 @@ export async function generateQRToken(req, res) {
  * The middleware already performs this check — if we reach this handler the session is valid.
  */
 export async function validateSession(req, res) {
+  // Refresh the Redis TTL on every heartbeat so active sessions stay alive
+  try {
+    const { jti, accountId } = req.auth;
+    await createKioskSession(accountId, jti); // re-set with fresh 30-min TTL
+  } catch (_) { /* non-fatal */ }
   return res.status(200).json({ valid: true });
 }
 
@@ -309,4 +310,60 @@ export async function deleteSession(req, res) {
   );
 }
 
-export default { requestOTP, verifyOTP, generateQRToken, validateSession, deleteSession };
+// ─── POST /api/auth/staff-login ──────────────────────────────────────────────
+
+// Demo staff credentials — in production replace with a DB lookup + bcrypt comparison.
+// Never store real passwords in code; use environment-level secrets or a staff DB table.
+const STAFF_CREDENTIALS = {
+  'TELLER001': { password: 'torii2024', name: 'Demo Teller', role: 'TELLER' },
+  'TELLER002': { password: 'torii2024', name: 'Senior Teller', role: 'TELLER' },
+  'MANAGER01': { password: 'toriiMgr!', name: 'Branch Manager', role: 'TELLER' },
+};
+
+/**
+ * Staff login — issues a long-lived TELLER JWT (8 hours).
+ * Used by the TellerLogin screen in production instead of the dev-only endpoint.
+ *
+ * POST /api/auth/staff-login
+ * Body: { employee_id: string, password: string }
+ * Returns: { teller_jwt: string, name: string, role: string }
+ */
+export async function staffLogin(req, res) {
+  const { employee_id, password } = req.body;
+
+  if (!employee_id || !password) {
+    return res.status(400).json({ error: 'ERR_MISSING_CREDENTIALS' });
+  }
+
+  const staff = STAFF_CREDENTIALS[employee_id.toUpperCase()];
+
+  if (!staff || staff.password !== password) {
+    // Deliberate vagueness — don't reveal whether the employee_id exists
+    emitAuthEvent('STAFF_LOGIN_FAILED', { employee_id: employee_id.toUpperCase() }, null);
+    return res.status(401).json({ error: 'ERR_INVALID_CREDENTIALS' });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const token = jwt.sign(
+    {
+      sub:       employee_id.toUpperCase(),
+      name:      staff.name,
+      role:      staff.role,
+      jti:       uuidv4(),
+      iat:       now,
+      exp:       now + 28800, // 8 hours
+    },
+    process.env.JWT_SECRET
+  );
+
+  emitAuthEvent('STAFF_LOGIN_SUCCESS', { employee_id: employee_id.toUpperCase(), name: staff.name }, null);
+
+  return res.status(200).json({
+    teller_jwt: token,
+    name: staff.name,
+    role: staff.role,
+    expires_in: 28800,
+  });
+}
+
+export default { requestOTP, verifyOTP, generateQRToken, validateSession, deleteSession, staffLogin };

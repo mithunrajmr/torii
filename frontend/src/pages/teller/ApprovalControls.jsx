@@ -1,8 +1,8 @@
 // frontend/src/pages/teller/ApprovalControls.jsx
 import React, { useState } from 'react';
-import { CheckCircle2, XCircle, ShieldAlert, ArrowUpRight } from 'lucide-react';
+import { CheckCircle2, XCircle, ShieldAlert, ArrowUpRight, AlertOctagon } from 'lucide-react';
 
-export default function ApprovalControls({ ticket, onApprove, onReject, loading }) {
+export default function ApprovalControls({ ticket, onApprove, onReject, onEscalate, loading }) {
   const [rejectReason, setRejectReason] = useState('BLURRY_IMAGE');
   const [showRejectModal, setShowRejectModal] = useState(false);
 
@@ -15,25 +15,32 @@ export default function ApprovalControls({ ticket, onApprove, onReject, loading 
         {isAmlBlocked && (
           <span className="text-xs font-bold text-red-600 flex items-center space-x-1">
             <ShieldAlert className="w-4 h-4" />
-            <span>Automated Approval Locked by AML Watchdog</span>
+            <span>Approval Locked — AML Risk</span>
           </span>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Approve Button */}
-        <button
-          onClick={onApprove}
-          disabled={loading || isAmlBlocked}
-          className={`py-3.5 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center space-x-2 ${
-            isAmlBlocked
-              ? 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-400'
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 cursor-pointer'
-          }`}
-        >
-          <CheckCircle2 className="w-5 h-5" />
-          <span>{loading ? 'Processing...' : '1-Click Approve'}</span>
-        </button>
+        {/* Approve OR Escalate button — mutually exclusive based on AML flag */}
+        {isAmlBlocked ? (
+          <button
+            onClick={onEscalate}
+            disabled={loading}
+            className="py-3.5 px-4 rounded-2xl font-bold text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 cursor-pointer flex items-center justify-center space-x-2"
+          >
+            <AlertOctagon className="w-5 h-5" />
+            <span>{loading ? 'Processing...' : 'Escalate to Compliance'}</span>
+          </button>
+        ) : (
+          <button
+            onClick={onApprove}
+            disabled={loading}
+            className="py-3.5 px-4 rounded-2xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/30 cursor-pointer flex items-center justify-center space-x-2"
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{loading ? 'Processing...' : '1-Click Approve'}</span>
+          </button>
+        )}
 
         {/* Reject Trigger Button */}
         <button

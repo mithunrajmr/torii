@@ -43,7 +43,11 @@ export async function set(key, value, options = {}) {
 
 export async function get(key) {
   if (redis) {
-    return redis.get(key);
+    // Upstash Redis REST client JSON-parses values on the way out.
+    // A stored string "123456" comes back as the number 123456.
+    // Always coerce to string (null stays null) so callers get predictable types.
+    const val = await redis.get(key);
+    return val == null ? null : String(val);
   }
 
   cleanExpiredKey(key);

@@ -61,6 +61,56 @@ async function getIAMToken() {
 }
 
 /**
+ * Parse the raw response body from POST /v1/orchestrate/{agent_id}/chat/completions.
+ *
+ * The endpoint streams Server-Sent Events (SSE) by default — even when the
+ * request includes `stream: false` — so we always read the body as text and
+ * reconstruct the content from `data: <json>` lines.  If the body happens to
+ * be plain JSON (non-streaming), we fall back to parsing it directly.
+ *
+ * SSE format emitted by Orchestrate:
+ *   data: {"id":"…","object":"chat.completion.chunk","choices":[{"delta":{"content":"…"}}]}
+ *   …
+ *   data: [DONE]
+ *
+ * @param {string} rawText - The full response body as a string
+ * @returns {string} Concatenated content from all SSE chunks, or '' if none found
+ */
+function parseOrchestrateResponse(rawText) {
+  // Fast path: plain JSON response (non-streaming fallback)
+  if (rawText.trimStart().startsWith('{') || rawText.trimStart().startsWith('[')) {
+    try {
+      const data = JSON.parse(rawText);
+      const choice = data.choices?.[0];
+      const content = choice?.message?.content ?? choice?.delta?.content ?? choice?.text ?? data.content ?? '';
+      return typeof content === 'string' ? content : JSON.stringify(content);
+    } catch {
+      // fall through to SSE parsing
+    }
+  }
+
+  // SSE path: collect all `data: <json>` lines and concatenate delta content
+  let assembled = '';
+  for (const line of rawText.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) continue;
+    const payload = trimmed.slice(5).trim();
+    if (payload === '[DONE]') break;
+    try {
+      const chunk = JSON.parse(payload);
+      const choice = chunk.choices?.[0];
+      // Non-streaming final chunk uses message.content; streaming uses delta.content
+      const piece = choice?.message?.content ?? choice?.delta?.content ?? '';
+      if (piece) assembled += piece;
+    } catch {
+      // ignore malformed SSE lines
+    }
+  }
+
+  return assembled;
+}
+
+/**
  * Send a single-turn message to an Orchestrate agent and return the text reply.
  *
  * @param {string} agentId   - The Orchestrate agent ID (from env vars)
@@ -89,7 +139,7 @@ export async function chatWithAgent(agentId, userMsg, context = {}) {
       },
     ],
     context,
-    stream: false,
+    stream: true,  // Orchestrate native agents always stream; keep explicit for clarity
   };
 
   const res = await fetch(url, {
@@ -109,12 +159,8 @@ export async function chatWithAgent(agentId, userMsg, context = {}) {
     );
   }
 
-  const data = await res.json();
-
-  // Orchestrate returns OpenAI-compatible response shape
-  const choice = data.choices?.[0];
-  const content = choice?.message?.content ?? choice?.text ?? '';
-  return typeof content === 'string' ? content : JSON.stringify(content);
+  const rawText = await res.text();
+  return parseOrchestrateResponse(rawText);
 }
 
 /**
@@ -131,8 +177,10 @@ export async function chatWithAgent(agentId, userMsg, context = {}) {
 export async function chatWithAgentJSON(agentId, userMsg, fallback, context = {}) {
   try {
     const text = await chatWithAgent(agentId, userMsg, context);
-    // Strip markdown code fences if the model wraps output in ```json ... ```
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    // Strip markdown code fences if the model wraps output in ```json … ```
+    // Also handles fences embedded mid-text (e.g. prose before the JSON block)
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const cleaned = fenceMatch ? fenceMatch[1].trim() : text.trim();
     return JSON.parse(cleaned);
   } catch (err) {
     console.warn(`[orchestrateClient] JSON parse failed for agent ${agentId}:`, err.message);

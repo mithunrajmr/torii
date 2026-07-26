@@ -52,9 +52,11 @@ export default function DocumentUpload() {
           setRetryCount(nextRetries);
           if (nextRetries >= 3) {
             setError('Image clarity low. Defaulting ticket to manual teller review.');
-            setTimeout(() => {
-              navigate(`/mobile/${token}/status`, { state: { ticketId: data.ticket_id } });
-            }, 2500);
+            if (data.ticket_id) {
+              setTimeout(() => {
+                navigate(`/mobile/${token}/status`, { state: { ticketId: data.ticket_id } });
+              }, 2500);
+            }
           } else {
             setError(`Image blurry or unclear (${data.confidence ? (data.confidence * 100).toFixed(0) : 0}% clarity). Retake attempt ${nextRetries}/3.`);
             setSelectedFile(null);

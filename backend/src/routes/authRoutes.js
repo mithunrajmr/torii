@@ -18,6 +18,7 @@ import {
   generateQRToken,
   validateSession,
   deleteSession,
+  staffLogin,
 } from '../controllers/authController.js';
 
 const router = Router();
@@ -25,6 +26,7 @@ const router = Router();
 // ── Public endpoints ──────────────────────────────────────────────────────────
 router.post('/otp/request', requestOTP);
 router.post('/otp/verify', verifyOTP);
+router.post('/staff-login', staffLogin);   // teller/staff login → TELLER JWT
 
 // ── Protected endpoints (CUSTOMER) ───────────────────────────────────────────
 router.post('/qr/generate', requireRole('CUSTOMER'), generateQRToken);

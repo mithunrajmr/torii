@@ -59,6 +59,13 @@ This file is formatted to let Kiro build a dependency graph and execute commands
   * **Action:** Build `/api/auth/verify`. Query `transactions` table for recent `ERR_PAN_MISSING_OVER_50K` codes. Issue short-lived Kiosk JWT.
   * **Verification:** Test endpoint via `tests/api/auth.test.js`.
 
+- [x] **TASK-201b: Register Kiosk API Route in Express Gateway**
+  * **Requirement Ref:** REQ-01, REQ-02
+  * **Dependencies:** [TASK-201]
+  * **Target Files:** `backend/src/index.js`, `backend/src/routes/kioskRoutes.js`
+  * **Action:** Import `kioskRoutes` and mount at `app.use('/api/kiosk', kioskRoutes)`. Route exposes `POST /api/kiosk/query` (requires `CUSTOMER` JWT) which runs the Localizer → Orchestrator → FAQ pipeline.
+  * **Status:** ✅ Done — route registered in `index.js`.
+
 - [ ] **TASK-202: Build Kiosk UI & 45-Second QR Handoff Timer**
   * **Requirement Ref:** REQ-02
   * **Dependencies:** [TASK-103, TASK-201]

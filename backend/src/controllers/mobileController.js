@@ -2,22 +2,36 @@
 // Mobile document upload pipeline.
 //
 // Flow:
-//   1. Consume single-use QR token from Redis
+//   1. Consume single-use QR token from Redis → derive session_id (SHA-256 hash)
 //   2. Upload raw image to Supabase Storage
 //   3. Execute parallel AI swarm (Vision OCR, Watchdog AML, Advisor) via Orchestrate
 //   4. Gate on clarity score — RETAKE_IMAGE if < 0.80, unless retry limit reached
-//   5. Insert teller ticket into PostgreSQL
-//   6. Return ticket_id, status, cross_sell_offer to mobile PWA
+//   5. Name-match gate — hard reject < 50%, soft flag 50–79%
+//   6. Insert teller ticket (with session_id) into PostgreSQL
+//   7. Return ticket_id, status, cross_sell_offer to mobile PWA
 //
 // Retry tracking: attempt count is stored in Redis as `upload:attempts:{accountId}`
 // with a 10-minute TTL, matching the QR token window.
 
+import crypto from 'crypto';
 import { consumeQRToken } from '../cache/sessionManager.js';
 import { set as redisSet, get as redisGet, incrWithExpiry } from '../cache/redisClient.js';
 import { uploadDocument } from '../services/storageService.js';
 import { executeParallelSwarm } from '../ai/swarmOrchestrator.js';
+import { computeNameMatchScore } from '../ai/visionAgent.js';
 import { query } from '../db/index.js';
 import { emitAuthEvent, AuditEventType } from '../ai/governanceSidecar.js';
+
+/**
+ * Derive a stable, non-reversible session identifier from the QR token.
+ * Stored in teller_tickets and audit_logs so every row can be traced back
+ * to the exact kiosk session that triggered it.
+ * @param {string} qrToken
+ * @returns {string} 32-char hex string
+ */
+function deriveSessionId(qrToken) {
+  return crypto.createHash('sha256').update(qrToken).digest('hex').slice(0, 32);
+}
 
 const MAX_RETRIES = 3;
 const RETRY_TTL = 600; // 10 minutes — matches QR token TTL
@@ -39,7 +53,9 @@ export async function uploadMobileDocument(req, res) {
     return res.status(400).json({ error: 'ERR_MISSING_QR_TOKEN' });
   }
 
-  // Consume the single-use QR token — returns accountId or null
+  // Consume the single-use QR token — returns accountId or null.
+  // Derive session_id BEFORE consuming so we have it even if consumption fails.
+  const sessionId = deriveSessionId(qr_token);
   const accountId = await consumeQRToken(qr_token);
   if (!accountId) {
     return res.status(401).json({ error: 'ERR_INVALID_OR_EXPIRED_QR_TOKEN' });
@@ -82,15 +98,39 @@ export async function uploadMobileDocument(req, res) {
       });
     }
 
-    // 4. Determine ticket status — manual review if 3rd attempt still fails OCR
+    // 4. Name-match gate (Spec §15 — 3-tier threshold logic)
+    // Only applied when OCR produced a name (skipped for PENDING_MANUAL_REVIEW path).
     const forceManualReview = ocr.clarity_score < 0.80 && currentAttempt >= MAX_RETRIES - 1;
+
+    if (!forceManualReview && ocr.name && ocr.name !== 'UNKNOWN') {
+      // Fetch the registered account name for fuzzy comparison
+      const accountRows = await query`SELECT full_name FROM accounts WHERE id = ${accountId}`;
+      const registeredName = accountRows[0]?.full_name || '';
+
+      const nameMatchScore = computeNameMatchScore(ocr.name, registeredName);
+
+      // Hard reject: score below 50% — no ticket created, error returned to mobile
+      if (nameMatchScore < 0.50) {
+        return res.status(400).json({
+          error: 'MISMATCH_ERROR',
+          message: 'The name on the uploaded document does not match the account record. Please visit a branch teller.',
+          name_match_score: nameMatchScore,
+        });
+      }
+
+      // Soft flag: 50%–79% — ticket is created but marked for teller attention
+      // nameMatchScore is stored on the ticket below
+      ocr._nameMatchScore = nameMatchScore;
+    }
+
     const status = forceManualReview ? 'PENDING_MANUAL_REVIEW' : 'PENDING';
     const amlFlagged = Boolean(watchdog.isSuspicious);
+    const nameMatchScore = ocr._nameMatchScore ?? null;
 
     // Clear retry counter on success path
     await redisSet(uploadAttemptsKey(accountId), '0', { ex: 60 });
 
-    // 5. Insert teller ticket
+    // 5. Insert teller ticket (now includes session_id + name_mismatch_score)
     const result = await query`
       INSERT INTO teller_tickets (
         account_id,
@@ -98,14 +138,18 @@ export async function uploadMobileDocument(req, res) {
         document_path,
         ocr_data,
         ai_confidence,
-        aml_flagged
+        name_mismatch_score,
+        aml_flagged,
+        session_id
       ) VALUES (
         ${accountId},
         ${status},
         ${documentPath},
         ${JSON.stringify({ name: ocr.name, pan_number: ocr.pan_number })},
         ${ocr.confidence ?? 0.9},
-        ${amlFlagged}
+        ${nameMatchScore},
+        ${amlFlagged},
+        ${sessionId}
       )
       RETURNING id, status, created_at
     `;
@@ -126,6 +170,7 @@ export async function uploadMobileDocument(req, res) {
         pan_extracted: ocr.pan_number,
         aml_flagged: amlFlagged,
         clarity_score: ocr.clarity_score,
+        name_match_score: nameMatchScore,
         forced_manual_review: forceManualReview,
       },
       accountId
@@ -139,20 +184,28 @@ export async function uploadMobileDocument(req, res) {
 /**
  * GET /api/mobile/status/:token
  * Polling endpoint for the mobile PWA to check teller decision.
- * The token param is used as a correlation key to find the most recent ticket.
+ * Uses session_id (SHA-256 of the QR token) for correct per-user lookup.
+ * Safe for concurrent users — each token maps to exactly one ticket.
  */
 export async function getMobileStatus(req, res) {
   try {
-    // In a production system the token would be a signed lookup key.
-    // For the current schema we return the latest PENDING/APPROVED/REJECTED ticket.
+    const { token } = req.params;
+    if (!token) {
+      return res.status(400).json({ error: 'ERR_MISSING_TOKEN' });
+    }
+
+    const sessionId = deriveSessionId(token);
+
     const rows = await query`
       SELECT id, status, rejection_reason, created_at
       FROM teller_tickets
+      WHERE session_id = ${sessionId}
       ORDER BY created_at DESC
       LIMIT 1
     `;
 
     if (!rows.length) {
+      // No ticket yet — upload may still be processing
       return res.status(200).json({ status: 'PENDING' });
     }
 

@@ -1,21 +1,85 @@
 // frontend/src/pages/teller/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import QueueList from './QueueList.jsx';
 import SecureImageDisplay from './SecureImageDisplay.jsx';
 import ApprovalControls from './ApprovalControls.jsx';
-import { Building2, ShieldAlert, CheckCircle2, UserCheck, RefreshCw } from 'lucide-react';
+import { Building2, ShieldAlert, CheckCircle2, UserCheck, RefreshCw, LogOut, Users } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
 
+// ── Teller auth helpers ────────────────────────────────────────────────────────
+// In dev mode: lazily fetches a dev token if none is stored (so dashboard works without login).
+// In production: localStorage must already have a teller_jwt from TellerLogin — if not, null
+//   is returned and the Dashboard redirects to /teller/login.
+async function getTellerToken() {
+  const stored = localStorage.getItem('teller_jwt');
+  if (stored) {
+    // Quick exp check — remove and return null if expired
+    try {
+      const payload = JSON.parse(atob(stored.split('.')[1]));
+      if (payload.exp <= Math.floor(Date.now() / 1000)) {
+        localStorage.removeItem('teller_jwt');
+        return null;
+      }
+    } catch (_) {
+      localStorage.removeItem('teller_jwt');
+      return null;
+    }
+    return stored;
+  }
+
+  // Dev-only convenience: auto-fetch a dev token so you can access the dashboard
+  // without going through TellerLogin. Not available in production.
+  if (import.meta.env.DEV) {
+    try {
+      const res = await fetch('/api/dev/teller-token', { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      localStorage.setItem('teller_jwt', data.teller_jwt);
+      return data.teller_jwt;
+    } catch (err) {
+      console.error('[Dashboard] Failed to obtain dev teller token:', err.message);
+      return null;
+    }
+  }
+
+  return null; // production: no token → Dashboard redirects to /teller/login
+}
+
+// Wrapper around fetch that injects the teller Authorization header.
+async function tellerFetch(url, options = {}) {
+  const token = await getTellerToken();
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [staffName, setStaffName] = useState(localStorage.getItem('teller_name') || 'Staff Teller');
+
+  // Auth guard — redirect to login if no valid JWT
+  useEffect(() => {
+    getTellerToken().then((token) => {
+      if (!token) navigate('/teller/login', { replace: true });
+    });
+  }, [navigate]);
 
   const fetchTickets = async () => {
     try {
-      const res = await fetch('/api/teller/tickets');
+      const res = await tellerFetch('/api/teller/tickets');
+      if (res.status === 401) { navigate('/teller/login', { replace: true }); return; }
       if (!res.ok) return;
       const data = await res.json();
       setTickets(data);
@@ -45,7 +109,7 @@ export default function Dashboard() {
     setFeedback(null);
 
     try {
-      const res = await fetch('/api/teller/action', {
+      const res = await tellerFetch('/api/teller/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -75,7 +139,7 @@ export default function Dashboard() {
     setFeedback(null);
 
     try {
-      const res = await fetch('/api/teller/action', {
+      const res = await tellerFetch('/api/teller/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,6 +164,36 @@ export default function Dashboard() {
     }
   };
 
+  const handleEscalate = async () => {
+    if (!selectedTicket || actionLoading) return;
+    setActionLoading(true);
+    setFeedback(null);
+
+    try {
+      const res = await tellerFetch('/api/teller/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket_id: selectedTicket.id,
+          action: 'ESCALATE',
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setFeedback({ type: 'error', message: err.message || 'Escalation failed' });
+        return;
+      }
+
+      setFeedback({ type: 'success', message: `Ticket #${selectedTicket.id.slice(0, 8)} escalated to Compliance.` });
+      fetchTickets();
+    } catch (err) {
+      setFeedback({ type: 'error', message: 'Connection error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#e8ecf2] font-sans text-slate-800 flex flex-col">
       
@@ -116,11 +210,32 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2 text-xs bg-slate-800 px-3 py-1.5 rounded-full text-slate-300">
             <UserCheck className="w-4 h-4 text-emerald-400" />
-            <span>Role: Staff Teller</span>
+            <span>{staffName}</span>
           </div>
+          {/* Account management link */}
+          <button
+            onClick={() => navigate('/teller/accounts')}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-full hover:bg-slate-800 transition-colors"
+            title="Manage Accounts"
+          >
+            <Users className="w-4 h-4" />
+            <span className="hidden sm:block">Accounts</span>
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('teller_jwt');
+              localStorage.removeItem('teller_name');
+              localStorage.removeItem('teller_role');
+              navigate('/teller/login', { replace: true });
+            }}
+            className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
           <button
             onClick={fetchTickets}
             className="p-2 text-slate-400 hover:text-white transition-colors"
@@ -218,6 +333,7 @@ export default function Dashboard() {
                   ticket={selectedTicket}
                   onApprove={handleApprove}
                   onReject={handleReject}
+                  onEscalate={handleEscalate}
                   loading={actionLoading}
                 />
 

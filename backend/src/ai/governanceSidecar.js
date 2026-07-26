@@ -29,6 +29,9 @@ export const AuditEventType = Object.freeze({
   DOCUMENT_UPLOADED: 'DOCUMENT_UPLOADED',
   TICKET_APPROVED: 'TICKET_APPROVED',
   TICKET_REJECTED: 'TICKET_REJECTED',
+  TICKET_ESCALATED: 'TICKET_ESCALATED',
+  KIOSK_QUERY_ROUTED: 'KIOSK_QUERY_ROUTED',
+  FAQ_QUERY_ANSWERED: 'FAQ_QUERY_ANSWERED',
 });
 
 // ─── PII Redaction ────────────────────────────────────────────────────────────

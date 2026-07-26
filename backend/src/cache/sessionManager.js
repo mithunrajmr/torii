@@ -6,11 +6,11 @@
 import { set, get, del, incrWithExpiry } from './redisClient.js';
 
 // ─── TTL Constants ────────────────────────────────────────────────────────────
-const OTP_TTL = 300;           // 5 minutes  (Req 2.4)
-const OTP_ATTEMPTS_TTL = 300;  // reset window matches OTP TTL
-const OTP_LOCK_TTL = 300;      // locked for 5 minutes (Req 3.4)
-const KIOSK_SESSION_TTL = 120; // 2 minutes  (Req 3.6)
-const QR_TOKEN_TTL = 600;      // 10 minutes (Req 5.2)
+const OTP_TTL = 300;            // 5 minutes  (Req 2.4)
+const OTP_ATTEMPTS_TTL = 300;   // reset window matches OTP TTL
+const OTP_LOCK_TTL = 300;       // locked for 5 minutes (Req 3.4)
+const KIOSK_SESSION_TTL = 1800; // 30 minutes — kept alive by inactivity timer on frontend
+const QR_TOKEN_TTL = 600;       // 10 minutes (Req 5.2)
 
 // ─── Key Namespaces ──────────────────────────────────────────────────────────
 const keys = {

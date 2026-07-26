@@ -39,6 +39,7 @@ const mockDatabase = {
       id: 'acc-0001-0000-0000-000000000001',
       user_id: 'usr-0001-0000-0000-000000000001',
       account_number: '1000000001',
+      full_name: 'ARJUN SHARMA',
       email: 'arjun.sharma@testbank.in',
       balance: 82500.00,
       pan_linked: false,
@@ -49,6 +50,7 @@ const mockDatabase = {
       id: 'acc-0002-0000-0000-000000000002',
       user_id: 'usr-0002-0000-0000-000000000002',
       account_number: '1000000002',
+      full_name: 'PRIYA NAIR',
       email: 'priya.nair@testbank.in',
       balance: 34200.00,
       pan_linked: true,
@@ -59,6 +61,7 @@ const mockDatabase = {
       id: 'acc-0003-0000-0000-000000000003',
       user_id: 'usr-0003-0000-0000-000000000003',
       account_number: '1000000003',
+      full_name: 'RAVI MEHTA',
       email: 'ravi.mehta@testbank.in',
       balance: 215000.00,
       pan_linked: false,
@@ -69,6 +72,7 @@ const mockDatabase = {
       id: 'acc-0004-0000-0000-000000000004',
       user_id: 'usr-0004-0000-0000-000000000004',
       account_number: '1000000004',
+      full_name: 'SUNITA RAO',
       email: 'sunita.rao@testbank.in',
       balance: 67800.00,
       pan_linked: false,
@@ -79,6 +83,7 @@ const mockDatabase = {
       id: 'acc-0005-0000-0000-000000000005',
       user_id: 'usr-0005-0000-0000-000000000005',
       account_number: '1000000005',
+      full_name: 'DEV TESTER',
       email: 'dev.tester@testbank.in',
       balance: 12000.00,
       pan_linked: true,
@@ -89,6 +94,7 @@ const mockDatabase = {
       id: 'acc-0006-0000-0000-000000000006',
       user_id: 'usr-0006-0000-0000-000000000006',
       account_number: '1000000006',
+      full_name: 'KARAN MALHOTRA',
       email: 'karan.malhotra@testbank.in',
       balance: 875000.00,
       pan_linked: false,
@@ -195,6 +201,74 @@ export async function query(strings, ...values) {
   // Basic mock SQL parser for local dev
   const rawSql = typeof strings === 'string' ? strings : strings.join('?');
 
+  // Health probe — SELECT 1 AS ping
+  if (rawSql.includes('SELECT 1')) {
+    return [{ ping: 1 }];
+  }
+
+  // ── Account CRUD (teller portal) ──────────────────────────────────────────
+
+  // account_number_seq UPDATE (auto-generate account number)
+  if (rawSql.includes('UPDATE account_number_seq')) {
+    if (!mockDatabase._accSeq) mockDatabase._accSeq = 7;
+    mockDatabase._accSeq += 1;
+    return [{ last_seq: mockDatabase._accSeq }];
+  }
+
+  // GET /api/teller/accounts — list all (with optional search via LIKE)
+  if (rawSql.includes('SELECT id, account_number, full_name, email, balance') && rawSql.includes('FROM accounts')) {
+    // Ensure every mock account has a created_at date for consistent display
+    const allWithDates = mockDatabase.accounts.map((a, i) => ({
+      ...a,
+      created_at: a.created_at || new Date(Date.now() - i * 60000),
+    }));
+    if (!rawSql.includes('WHERE')) {
+      // No search — return all, newest first
+      return [...allWithDates].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    // Search case — filter by name/account_number containing values[0] (stripped of %)
+    const term = String(values[0] || '').replace(/%/g, '').toLowerCase();
+    return allWithDates.filter(
+      (a) =>
+        (a.full_name || '').toLowerCase().includes(term) ||
+        String(a.account_number).includes(term)
+    );
+  }
+
+  // GET /api/teller/accounts/:id
+  if (rawSql.includes('FROM accounts') && rawSql.includes('WHERE id =')) {
+    const id = values[0];
+    return mockDatabase.accounts.filter((a) => a.id === id);
+  }
+
+  // INSERT INTO accounts (CRUD create — account_number is passed as values[2])
+  if (rawSql.includes('INSERT INTO accounts') && rawSql.includes('RETURNING')) {
+    const [id, userId, accountNumber, fullName, email, balance] = values;
+    if (mockDatabase.accounts.find((a) => a.email === email)) {
+      throw new Error('duplicate key value violates unique constraint');
+    }
+    const created_at = new Date();
+    const newAcc = {
+      id, user_id: userId, account_number: accountNumber,
+      full_name: fullName, email, balance: Number(balance),
+      pan_linked: false, pan_number: null, created_at,
+    };
+    mockDatabase.accounts.push(newAcc);
+    return [{ id, account_number: accountNumber, full_name: fullName, email, balance: Number(balance), pan_linked: false, created_at }];
+  }
+
+  // UPDATE accounts SET full_name / email / balance (CRUD update — COALESCE pattern)
+  if (rawSql.includes('UPDATE accounts') && rawSql.includes('COALESCE') && rawSql.includes('RETURNING')) {
+    // values: [full_name|null, email|null, balance|null, id]
+    const [newName, newEmail, newBalance, id] = values;
+    const acc = mockDatabase.accounts.find((a) => a.id === id);
+    if (!acc) return [];
+    if (newName    != null) acc.full_name = newName;
+    if (newEmail   != null) acc.email     = newEmail;
+    if (newBalance != null) acc.balance   = Number(newBalance);
+    return [{ ...acc }];
+  }
+
   if (rawSql.includes('SELECT id, email FROM accounts WHERE account_number')) {
     const accNum = values[0];
     return mockDatabase.accounts.filter((a) => a.account_number === accNum);
@@ -202,6 +276,14 @@ export async function query(strings, ...values) {
   if (rawSql.includes('SELECT id, account_number FROM accounts WHERE account_number')) {
     const accNum = values[0];
     return mockDatabase.accounts.filter((a) => a.account_number === accNum);
+  }
+  if (rawSql.includes('SELECT email FROM accounts WHERE id')) {
+    const accountId = values[0];
+    return mockDatabase.accounts.filter((a) => a.id === accountId).map((a) => ({ email: a.email }));
+  }
+  if (rawSql.includes('SELECT full_name FROM accounts WHERE id')) {
+    const accountId = values[0];
+    return mockDatabase.accounts.filter((a) => a.id === accountId).map((a) => ({ full_name: a.full_name }));
   }
   if (rawSql.includes('SELECT balance FROM accounts WHERE id')) {
     const accountId = values[0];
@@ -227,6 +309,8 @@ export async function query(strings, ...values) {
     );
   }
   if (rawSql.includes('INSERT INTO teller_tickets')) {
+    // Column order: account_id, status, document_path, ocr_data, ai_confidence,
+    //               name_mismatch_score, aml_flagged, session_id
     const newTicket = {
       id: `ticket_${Date.now()}`,
       account_id: values[0],
@@ -234,7 +318,9 @@ export async function query(strings, ...values) {
       document_path: values[2],
       ocr_data: typeof values[3] === 'string' ? JSON.parse(values[3]) : values[3],
       ai_confidence: values[4],
-      aml_flagged: values[5],
+      name_mismatch_score: values[5] ?? null,
+      aml_flagged: values[6],
+      session_id: values[7] ?? null,
       created_at: new Date(),
     };
     mockDatabase.teller_tickets.unshift(newTicket);
@@ -255,7 +341,13 @@ export async function query(strings, ...values) {
           return { ...t, account_number: acc?.account_number || null };
         });
     }
-    // Status poller — most recent ticket
+    if (rawSql.includes('WHERE session_id =')) {
+      // Status poller — find ticket by session_id (correct multi-user lookup)
+      const sessionId = values[0];
+      const filtered = mockDatabase.teller_tickets.filter((t) => t.session_id === sessionId);
+      return filtered.slice(0, 1);
+    }
+    // Status poller fallback — most recent ticket (dev only)
     return mockDatabase.teller_tickets.slice(0, 1);
   }
   if (rawSql.includes('UPDATE accounts')) {
@@ -269,11 +361,31 @@ export async function query(strings, ...values) {
     return [{ updated: true }];
   }
   if (rawSql.includes('UPDATE teller_tickets')) {
-    const status = values[0];
-    const id = values[1];
-    const ticket = mockDatabase.teller_tickets.find((t) => t.id === id);
-    if (ticket) {
-      ticket.status = status;
+    // Three query shapes from tellerController:
+    //   APPROVE/ESCALATE: SET status=$1, reviewed_by=$2 WHERE id=$3     → values = [status, tellerId, ticketId]
+    //   REJECT:           SET status=$1, rejection_reason=$2, reviewed_by=$3 WHERE id=$4 → values.length === 4
+    if (values.length >= 4) {
+      // Reject path — status, rejection_reason, reviewed_by, ticket_id
+      const [status, rejectionReason, reviewedBy, id] = values;
+      const ticket = mockDatabase.teller_tickets.find((t) => t.id === id);
+      if (ticket) {
+        ticket.status = status;
+        ticket.rejection_reason = rejectionReason;
+        ticket.reviewed_by = reviewedBy;
+      }
+    } else if (values.length === 3) {
+      // Approve / Escalate path — status, reviewed_by, ticket_id
+      const [status, reviewedBy, id] = values;
+      const ticket = mockDatabase.teller_tickets.find((t) => t.id === id);
+      if (ticket) {
+        ticket.status = status;
+        ticket.reviewed_by = reviewedBy;
+      }
+    } else {
+      // Fallback for any 2-value update
+      const [status, id] = values;
+      const ticket = mockDatabase.teller_tickets.find((t) => t.id === id);
+      if (ticket) ticket.status = status;
     }
     return [{ updated: true }];
   }
@@ -285,6 +397,14 @@ export async function query(strings, ...values) {
       actor_id: values[2],
       created_at: new Date(),
     });
+    return [{ inserted: true }];
+  }
+
+  // faq_query_log and faq_kb_proposals — no-op in mock (real data only in Supabase)
+  if (
+    rawSql.includes('INSERT INTO faq_query_log') ||
+    rawSql.includes('INSERT INTO faq_kb_proposals')
+  ) {
     return [{ inserted: true }];
   }
 

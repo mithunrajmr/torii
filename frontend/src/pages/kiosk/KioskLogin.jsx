@@ -170,17 +170,19 @@ export default function KioskLogin() {
       if (!res.ok) {
         if (data.error === 'ERR_OTP_EXPIRED') {
           setError('OTP code expired. Please request a new code.');
-        } else if (data.error === 'ERR_MAX_ATTEMPTS_EXCEEDED') {
+        } else if (data.error === 'ERR_OTP_LOCKED' || data.error === 'ERR_MAX_ATTEMPTS_EXCEEDED') {
+          // Backend sends ERR_OTP_LOCKED for both lockout scenarios
           setIsLocked(true);
           setLockCountdown(300);
           setError('Maximum security attempts exceeded. Account locked for 5 minutes.');
-        } else if (data.error === 'ERR_INVALID_OTP') {
+        } else if (data.error === 'ERR_OTP_INVALID' || data.error === 'ERR_INVALID_OTP') {
+          // Backend sends ERR_OTP_INVALID; handle both spellings for robustness
           setAttemptsRemaining(data.attempts_remaining);
           setError(`Invalid OTP. ${data.attempts_remaining} attempt(s) remaining.`);
           setOtp('');
           setMaskedDigitsOtp([]);
         } else {
-          setError(data.message || 'OTP verification failed.');
+          setError(data.message || data.error || 'OTP verification failed.');
         }
         return;
       }

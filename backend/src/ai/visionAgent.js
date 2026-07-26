@@ -26,34 +26,52 @@ const CLARITY_THRESHOLD = 0.80;
  * @returns {Promise<{name: string, pan_number: string, confidence: number, clarity_score: number}>}
  */
 export async function processVisionOCR(fileBuffer, mimeType) {
-  // Check if Orchestrate is configured; fall back to simulation in dev
-  if (!process.env.WATSONX_ORCHESTRATE_API_KEY || !process.env.WATSONX_ORCHESTRATE_ENDPOINT) {
-    console.info('[visionAgent] Orchestrate not configured — using dev simulation');
-    return _devSimulation();
-  }
-
   const base64Image = fileBuffer.toString('base64');
-  const dataUri = `data:${mimeType};base64,${base64Image}`;
 
   const prompt =
-    'You are a PAN card OCR extractor. Analyse the provided document image and return ONLY a valid JSON object with these exact keys: ' +
-    '"name" (full name as printed), "pan_number" (10-character alphanumeric PAN), ' +
-    '"clarity_score" (float 0.0-1.0 representing image readability), ' +
-    '"confidence" (float 0.0-1.0 representing extraction confidence). ' +
-    'Return nothing else — no explanation, no markdown, just the JSON object.\n\n' +
-    `Image (base64): ${dataUri.substring(0, 200)}...`;
+    'You are a PAN card OCR extractor. A document image has been provided in the context. ' +
+    'Use the extract_pan_from_image tool to analyse it, then return ONLY a valid JSON object with these exact keys: ' +
+    '"name" (full name as printed on card), "pan_number" (10-character PAN — 5 uppercase letters + 4 digits + 1 uppercase letter), ' +
+    '"clarity_score" (float 0.0–1.0 representing image readability), ' +
+    '"confidence" (float 0.0–1.0 representing extraction confidence). ' +
+    'Return nothing else — no explanation, no markdown, just the JSON object.';
 
-  const fallback = _devSimulation();
-  const result = await chatWithAgentJSON(VISION_AGENT_ID, prompt, fallback, {
+  // No silent fallback — if Orchestrate is not configured this throws immediately.
+  // In production you will see a real error; in dev run: POST /api/dev/teller-token
+  // and set WATSONX_ORCHESTRATE_API_KEY + WATSONX_ORCHESTRATE_ENDPOINT in .env.
+  const result = await chatWithAgentJSON(VISION_AGENT_ID, prompt, null, {
     document_base64: base64Image,
     mime_type: mimeType,
   });
 
+  if (!result) {
+    throw new Error(
+      '[visionAgent] Orchestrate returned no parseable JSON. ' +
+      'Check WATSONX_ORCHESTRATE_API_KEY and WATSONX_ORCHESTRATE_ENDPOINT are set.'
+    );
+  }
+
+  // Output validation: PAN must match format or be null
+  const PAN_FORMAT = /^[A-Z]{5}\d{4}[A-Z]$/;
+  const rawPan = result.pan_number;
+  const pan_number = rawPan && PAN_FORMAT.test(String(rawPan).trim().toUpperCase())
+    ? String(rawPan).trim().toUpperCase()
+    : null;
+
+  const confidence = Number(result.confidence);
+  const clarity_score = Number(result.clarity_score);
+
+  if (isNaN(confidence) || isNaN(clarity_score)) {
+    throw new Error(
+      `[visionAgent] Orchestrate returned invalid scores: confidence=${result.confidence}, clarity_score=${result.clarity_score}`
+    );
+  }
+
   return {
-    name: result.name || 'UNKNOWN',
-    pan_number: result.pan_number || null,
-    confidence: Number(result.confidence ?? 0.5),
-    clarity_score: Number(result.clarity_score ?? 0.5),
+    name: result.name ? String(result.name).trim() : 'UNKNOWN',
+    pan_number,
+    confidence: Math.min(1, Math.max(0, confidence)),
+    clarity_score: Math.min(1, Math.max(0, clarity_score)),
   };
 }
 
@@ -77,15 +95,6 @@ export function computeNameMatchScore(extractedName, recordName) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function _devSimulation() {
-  return {
-    name: 'MITHUN RAJ',
-    pan_number: 'ABCDE1234F',
-    confidence: 0.94,
-    clarity_score: 0.92,
-  };
-}
 
 function _levenshtein(a, b) {
   const matrix = Array.from({ length: a.length + 1 }, () =>
