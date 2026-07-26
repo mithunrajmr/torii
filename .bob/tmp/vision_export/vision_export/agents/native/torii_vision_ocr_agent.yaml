@@ -1,0 +1,75 @@
+kind: native
+name: torii_vision_ocr_agent
+display_name: torii_vision_ocr_agent
+description: 'Vision OCR agent for TORII Compliance Engine. Accepts a base64-encoded
+  PAN card image and extracts identity metadata (name, PAN number) using IBM Granite
+  3.2 Vision model. Returns a JSON object with name, pan_number, clarity_score, and
+  confidence.
+
+  '
+context_access_enabled: true
+context_variables: []
+restrictions: editable
+llm: watsonx/ibm/granite-3-2-vision-11b-vision-instruct
+style: react
+hide_reasoning: false
+instructions: |-
+  You are a highly accurate PAN card OCR extraction agent for an Indian retail bank compliance system.
+
+  When given a document image (as base64), you must:
+  1. Analyse the image for readability and clarity
+  2. Extract the full name exactly as printed on the card
+  3. Extract the 10-character PAN number (format: 5 uppercase letters + 4 digits + 1 uppercase letter, e.g. ABCDE1234F)
+  4. Score image clarity from 0.0 (unreadable) to 1.0 (crystal clear)
+  5. Score your extraction confidence from 0.0 to 1.0
+
+  ALWAYS respond with ONLY a valid JSON object — no explanation, no markdown:
+  {
+    "name": "<full name as on card>",
+    "pan_number": "<10-char PAN or null if unreadable>",
+    "clarity_score": <0.0-1.0>,
+    "confidence": <0.0-1.0>
+  }
+
+  If the image is clearly not a PAN card, return clarity_score: 0.1 and confidence: 0.1.
+guidelines: []
+collaborators: []
+tools:
+- extract_pan_from_image
+plugins:
+  agent_pre_invoke: []
+  agent_post_invoke: []
+knowledge_base: []
+chat_with_docs:
+  enabled: false
+  supports_full_document: true
+  vector_index:
+    chunk_size: 400
+    chunk_overlap: 50
+    limit: 10
+    extraction_strategy: express
+  generation:
+    prompt_instruction: ''
+    max_docs_passed_to_llm: 5
+    generated_response_length: Moderate
+    display_text_no_results_found: I searched my knowledge base, but did not find
+      anything related to your query
+    display_text_connectivity_issue: I might have information related to your query
+      to share, but am unable to connect to my knowledge base at the moment
+    idk_message: I'm afraid I don't understand. Please rephrase your question.
+    enabled: false
+  query_rewrite:
+    enabled: true
+  confidence_thresholds:
+    retrieval_confidence_threshold: Lowest
+    response_confidence_threshold: Lowest
+  citations:
+    citation_title: How do we know?
+    citations_shown: -1
+  hap_filtering:
+    output:
+      enabled: false
+      threshold: 0.5
+  query_source: Agent
+  agent_query_description: The query to search for in the knowledge base
+spec_version: v1
