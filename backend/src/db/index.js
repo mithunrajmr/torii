@@ -351,6 +351,18 @@ export async function query(strings, ...values) {
     return mockDatabase.teller_tickets.slice(0, 1);
   }
   if (rawSql.includes('UPDATE accounts')) {
+    // Sandbox reset: UPDATE accounts SET balance=, pan_linked=, pan_number= WHERE account_number
+    if (rawSql.includes('WHERE account_number')) {
+      const [balance, panLinked, panNumber, accountNumber] = values;
+      const acc = mockDatabase.accounts.find((a) => a.account_number === accountNumber);
+      if (acc) {
+        acc.balance    = Number(balance);
+        acc.pan_linked = panLinked;
+        acc.pan_number = panNumber ?? null;
+      }
+      return [{ updated: true }];
+    }
+    // Teller approval: UPDATE accounts SET pan_linked = true, pan_number = $1 WHERE id = $2
     const panNumber = values[0];
     const accountId = values[1];
     const acc = mockDatabase.accounts.find((a) => a.id === accountId);
@@ -406,6 +418,113 @@ export async function query(strings, ...values) {
     rawSql.includes('INSERT INTO faq_kb_proposals')
   ) {
     return [{ inserted: true }];
+  }
+
+  // ── Sandbox seeding & reset ─────────────────────────────────────────────
+
+  // SELECT id FROM accounts WHERE account_number (sandbox seed lookup)
+  if (rawSql.includes('SELECT id FROM accounts WHERE account_number')) {
+    const accNum = values[0];
+    return mockDatabase.accounts.filter((a) => a.account_number === accNum).map((a) => ({ id: a.id }));
+  }
+
+  // INSERT INTO accounts ... ON CONFLICT (sandbox UPSERT)
+  if (rawSql.includes('INSERT INTO accounts') && rawSql.includes('ON CONFLICT')) {
+    const [id, userId, accountNumber, fullName, email, balance, panLinked, panNumber] = values;
+    const existing = mockDatabase.accounts.find((a) => a.account_number === accountNumber);
+    if (existing) {
+      existing.full_name  = fullName;
+      existing.email      = email;
+      existing.balance    = Number(balance);
+      existing.pan_linked = panLinked;
+      existing.pan_number = panNumber ?? null;
+    } else {
+      mockDatabase.accounts.push({
+        id,
+        user_id: userId,
+        account_number: accountNumber,
+        full_name: fullName,
+        email,
+        balance: Number(balance),
+        pan_linked: panLinked,
+        pan_number: panNumber ?? null,
+      });
+    }
+    return [{ id, account_number: accountNumber }];
+  }
+
+  // DELETE FROM transactions WHERE account_id (sandbox purge before re-seed)
+  if (rawSql.includes('DELETE FROM transactions WHERE account_id')) {
+    const accountId = values[0];
+    const before = mockDatabase.transactions.length;
+    mockDatabase.transactions = mockDatabase.transactions.filter((t) => t.account_id !== accountId);
+    return [{ deleted: before - mockDatabase.transactions.length }];
+  }
+
+  // INSERT INTO transactions (sandbox injection — id, account_id, amount, error_code, created_at)
+  if (rawSql.includes('INSERT INTO transactions')) {
+    const [id, accountId, amount, errorCode, createdAt] = values;
+    const newTx = {
+      id,
+      account_id: accountId,
+      amount: Number(amount),
+      error_code: errorCode ?? null,
+      created_at: new Date(createdAt),
+    };
+    mockDatabase.transactions.push(newTx);
+    return [{ id }];
+  }
+
+  // DELETE FROM teller_tickets (sandbox reset & ticket seeding purge)
+  if (rawSql.includes('DELETE FROM teller_tickets')) {
+    if (rawSql.includes('WHERE account_id')) {
+      const accountId = values[0];
+      mockDatabase.teller_tickets = mockDatabase.teller_tickets.filter((t) => t.account_id !== accountId);
+      return [{ deleted: true }];
+    }
+    mockDatabase.teller_tickets = [];
+    return [{ deleted: true }];
+  }
+
+  // DELETE FROM audit_logs (sandbox reset)
+  if (rawSql.includes('DELETE FROM audit_logs')) {
+    mockDatabase.audit_logs = [];
+    return [{ deleted: true }];
+  }
+
+  // DELETE FROM transactions (sandbox global reset — no WHERE clause)
+  if (rawSql.includes('DELETE FROM transactions')) {
+    mockDatabase.transactions = [];
+    return [{ deleted: true }];
+  }
+
+  // GET /api/sandbox/ledger — accounts with active ticket count
+  if (rawSql.includes('COUNT(t.id)') && rawSql.includes('active_tickets')) {
+    return mockDatabase.accounts.map((a) => {
+      const activeTickets = mockDatabase.teller_tickets.filter(
+        (t) => t.account_id === a.id && ['PENDING', 'PENDING_MANUAL_REVIEW'].includes(t.status)
+      ).length;
+      return {
+        id: a.id,
+        account_number: a.account_number,
+        full_name: a.full_name,
+        balance: a.balance,
+        pan_linked: a.pan_linked,
+        active_tickets: activeTickets,
+      };
+    }).sort((a, b) => a.account_number.localeCompare(b.account_number));
+  }
+
+  // GET /api/sandbox/ledger — most recent transaction per account (DISTINCT ON)
+  if (rawSql.includes('DISTINCT ON') && rawSql.includes('account_id')) {
+    const latestByAccount = {};
+    for (const tx of mockDatabase.transactions) {
+      const existing = latestByAccount[tx.account_id];
+      if (!existing || new Date(tx.created_at) > new Date(existing.created_at)) {
+        latestByAccount[tx.account_id] = tx;
+      }
+    }
+    return Object.values(latestByAccount);
   }
 
   return [];

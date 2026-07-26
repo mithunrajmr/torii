@@ -52,8 +52,19 @@ See `docs/requirements.md` for the full feature specification and `docs/Dbscheme
 | GET | `/api/mobile/status/:token` | None | Poll ticket status from mobile |
 | GET | `/api/teller/tickets` | TELLER JWT | List pending tickets |
 | POST | `/api/teller/action` | TELLER JWT | Approve or reject a ticket |
+| GET | `/api/system/radar` | None | Proactive alert: deduplicated failed transactions in last 24 h — returns `{ failures[], activeCount, snapshot_at }` with masked account numbers (`****NNNN`) and first-name-only identity |
 
 ## Dev Utilities
+
+### Infrastructure Verification
+
+Run the diagnostic script to probe all external services (PostgreSQL, Redis, Supabase Storage, Gemini, watsonx Orchestrate) and print a colour-coded summary table:
+
+```bash
+node backend/scripts/verify-infra.js
+```
+
+The script loads `.env` automatically and exits with code `1` if any service is in a `FAILING` state. Use this before deploying or after changing credentials to confirm every integration is live.
 
 ### Generate a Teller JWT (non-production only)
 

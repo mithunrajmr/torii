@@ -189,8 +189,13 @@ export default function KioskLogin() {
 
       sessionStorage.setItem('kiosk_jwt', data.jwt);
       navigate('/kiosk/triage', {
-        state: { jwt: data.jwt, failedTxSummary: data.failed_tx_summary },
+        state: {
+          jwt: data.jwt,
+          failedTxSummary: data.failed_tx_summary,
+          accountStatus: data.account_status,
+        },
       });
+
     } catch (err) {
       setError('Connection error. Please try again.');
     } finally {

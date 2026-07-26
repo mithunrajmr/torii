@@ -1,0 +1,214 @@
+# Visual Security & Anti-Fraud Inspection Guidelines
+**Document ID:** TORII-VIS-FRAUD-2026  
+**System:** TORII Vision OCR Engine & Security Inspector
+
+## 1. Scope & Primary Objective
+To prevent identity theft, impersonation, and fraudulent document uploads during the mobile PWA triage handoff. The Vision OCR Agent must evaluate physical document authenticity before passing extracted text to downstream processing.
+
+## 2. Digital Screen Capture Detection (Moiré Pattern Analysis)
+When a customer photographs a digital screen (laptop, smartphone, or tablet displaying an ID) instead of capturing a physical document, the image exhibits distinctive optical noise:
+* **Moiré Interference Patterns:** Interlocking wave or grid patterns caused by the camera sensor interacting with screen pixels.
+* **Bezel & Edge Reflection:** Direct specular highlights or curved bezel reflections around the document borders.
+* **Sub-pixel Color Fringing:** RGB sub-pixel separation visible at high magnification around text edges.
+* **Action:** If Moiré artifacts or sub-pixel fringing are detected with confidence $> 0.70$, reject the upload immediately with status: `REJECT_SCREEN_CAPTURE_DETECTED`.
+
+## 3. Physical Photo Overlay & Cut-and-Paste Detection
+Perpertrators often paste a physical photograph or printed text slip over a genuine ID card:
+* **Shadow Anomaly along Photo Border:** Inspect the boundary around the passport/PAN photograph for unnatural drop shadows indicating a raised sticker or paper edge.
+* **Font Alignment & Weight Inconsistency:** Verify that text across the document maintains consistent DPI, character weight, line spacing, and print degradation. Any region showing crisp digital text alongside blurry surrounding print indicates digital manipulation.
+* **Hologram Interruption:** Genuine PAN and Aadhaar cards feature central holographic overlays. If a text string or photo sits *above* the hologram pattern, the document is counterfeit.
+* **Action:** If photo border shadows or font anomalies exist, set `status: "PENDING_MANUAL_REVIEW"` and flag `TAMPERING_SUSPICION: true`.
+
+## 4. Document-Specific Security Features
+* **Aadhaar QR Code Verification:** Physical Aadhaar cards contain a digitally signed QR code containing demographic data and photo. The Vision Agent must isolate and verify the cryptographic signature using UIDAI public keys.
+* **PAN Micro-Text Line:** The border below the photograph on a genuine PAN card consists of micro-printed text reading "INCOMETAXDEPARTMENT". If OCR resolves this line as a solid grey bar due to extreme low resolution, enforce image re-capture (`RETAKE_IMAGE`).
+* **Passport MRZ Check-Digit Validation:** Calculate mathematical check digits for the MRZ string (Passport Number, Date of Birth, Expiration Date). If checksum fails, reject the upload as altered text.{
+  "metadata": {
+    "document_name": "OCR_Error_Mitigation_Rules",
+    "version": "2026.5.0",
+    "description": "Deterministic heuristic rules to automatically resolve optical character misinterpretations across all Indian banking compliance documents."
+  },
+  "common_optical_confusions": [
+    { "vision_output": "0", "actual_character": "O", "confidence_drop": 0.15 },
+    { "vision_output": "O", "actual_character": "0", "confidence_drop": 0.15 },
+    { "vision_output": "8", "actual_character": "B", "confidence_drop": 0.20 },
+    { "vision_output": "5", "actual_character": "S", "confidence_drop": 0.10 },
+    { "vision_output": "1", "actual_character": "I", "confidence_drop": 0.12 },
+    { "vision_output": "2", "actual_character": "Z", "confidence_drop": 0.18 },
+    { "vision_output": "l", "actual_character": "1", "confidence_drop": 0.10 }
+  ],
+  "heuristic_correction_matrix": {
+    "PAN_CARD": [
+      {
+        "target_indices": [0, 1, 2, 3, 4],
+        "expected_type": "ALPHABETIC",
+        "corrections": [
+          { "if_detected": "0", "force_correct_to": "O" },
+          { "if_detected": "8", "force_correct_to": "B" },
+          { "if_detected": "5", "force_correct_to": "S" },
+          { "if_detected": "1", "force_correct_to": "I" }
+        ]
+      },
+      {
+        "target_indices": [5, 6, 7, 8],
+        "expected_type": "NUMERIC",
+        "corrections": [
+          { "if_detected": "O", "force_correct_to": "0" },
+          { "if_detected": "B", "force_correct_to": "8" },
+          { "if_detected": "S", "force_correct_to": "5" },
+          { "if_detected": "Z", "force_correct_to": "2" }
+        ]
+      },
+      {
+        "target_indices": [9],
+        "expected_type": "ALPHABETIC",
+        "corrections": [
+          { "if_detected": "0", "force_correct_to": "O" },
+          { "if_detected": "8", "force_correct_to": "B" },
+          { "if_detected": "5", "force_correct_to": "S" }
+        ]
+      }
+    ],
+    "AADHAAR_CARD": [
+      {
+        "target_indices": "ALL",
+        "expected_type": "NUMERIC",
+        "rationale": "Aadhaar is a strictly 12-digit numeric identifier.",
+        "corrections": [
+          { "if_detected": "O", "force_correct_to": "0" },
+          { "if_detected": "l", "force_correct_to": "1" },
+          { "if_detected": "I", "force_correct_to": "1" },
+          { "if_detected": "B", "force_correct_to": "8" }
+        ]
+      }
+    ],
+    "VOTER_ID_EPIC": [
+      {
+        "target_indices": [0, 1, 2],
+        "expected_type": "ALPHABETIC",
+        "corrections": [
+          { "if_detected": "0", "force_correct_to": "O" },
+          { "if_detected": "8", "force_correct_to": "B" },
+          { "if_detected": "1", "force_correct_to": "I" }
+        ]
+      },
+      {
+        "target_indices": [3, 4, 5, 6, 7, 8, 9],
+        "expected_type": "NUMERIC",
+        "corrections": [
+          { "if_detected": "O", "force_correct_to": "0" },
+          { "if_detected": "S", "force_correct_to": "5" },
+          { "if_detected": "l", "force_correct_to": "1" }
+        ]
+      }
+    ],
+    "DRIVING_LICENCE": [
+      {
+        "target_indices": [0, 1],
+        "expected_type": "ALPHABETIC",
+        "rationale": "First two characters represent the State Code (e.g., MH, DL, KA).",
+        "corrections": [
+          { "if_detected": "0", "force_correct_to": "O" },
+          { "if_detected": "1", "force_correct_to": "I" }
+        ]
+      },
+      {
+        "target_indices": [2, 3],
+        "expected_type": "NUMERIC",
+        "rationale": "Characters 3 and 4 represent the RTO code.",
+        "corrections": [
+          { "if_detected": "O", "force_correct_to": "0" }
+        ]
+      }
+    ],
+    "CHEQUE_MICR_BAND": [
+      {
+        "target_indices": "ALL",
+        "expected_type": "NUMERIC_AND_SYMBOLS",
+        "rationale": "MICR band strictly uses E-13B font numbers and 4 special transit symbols. No standard alphabets exist.",
+        "corrections": [
+          { "if_detected": "O", "force_correct_to": "0" },
+          { "if_detected": "B", "force_correct_to": "8" },
+          { "if_detected": "l", "force_correct_to": "1" },
+          { "if_detected": "I", "force_correct_to": "1" },
+          { "if_detected": "S", "force_correct_to": "5" },
+          { "if_detected": "Z", "force_correct_to": "2" }
+        ]
+      }
+    ],
+    "UTILITY_BILL": [
+      {
+        "validation_rule": "DATE_CHECK",
+        "rationale": "Utility bills must not be older than two months from the current extraction date.",
+        "fallback_action": "REJECT_DOCUMENT_EXPIRED"
+      }
+    ]
+  },
+  "confidence_gating": {
+    "clarity_threshold_minimum": 0.80,
+    "levenshtein_name_match_minimum": 0.50,
+    "fallback_action": "TRIGGER_PENDING_MANUAL_REVIEW"
+  }
+}# Visual Format & Structural Guidelines for Indian Banking Documents
+**Document Version:** 2026.5.0  
+**Classification:** INTERNAL_CONFIDENTIAL  
+**System:** TORII Vision Extraction Engine
+
+## 1. Primary Identity Documents (RBI Officially Valid Documents - OVDs)
+The Vision Agent must perform spatial bounding-box detection to isolate identity fields before character extraction.
+
+*   **PAN Card:** A ten-character alphanumeric identifier. Format: 5 letters, 4 numbers, 1 letter. The 4th letter denotes entity type (e.g., 'P' for Person).
+*   **Aadhaar Card:** A strictly 12-digit numeric identifier formatted with spaces (`XXXX XXXX XXXX`). The agent must identify whether the document is a physical card, e-Aadhaar, or m-Aadhaar, and enforce UIDAI masking rules (masking the first 8 digits) before downstream storage.
+*   **Voter Identity Card (EPIC):** A 10-character alphanumeric string. The first 3 characters are alphabetic (representing the State/Constituency code), followed by 7 numeric digits.
+*   **Indian Passport:** The agent must scan the Machine Readable Zone (MRZ) at the bottom of the data page. It consists of two lines of 44 characters containing 'P', country code 'IND', surname, given names, passport number, and cryptographic check digits.
+*   **Driving Licence:** Format varies by state but generally follows: 2-letter State Code, 2-digit RTO code, 4-digit year of issue, and a 7-digit sequence number (e.g., `MH01 20260001234`).
+
+## 2. Address Proof Documents (Deemed OVDs)
+For Re-KYC and address updates, the system accepts "Deemed OVDs". The OCR engine must extract the billing name, address block, and the **document issue date**.
+*   **Utility Bills:** Electricity, telephone, post-paid mobile, piped gas, or water bills. 
+    * *Validation Rule:* The bill must be the latest issued and **not more than two months old**. If older, it must be rejected.
+*   **Municipal Tax Receipts:** Property or municipal tax receipts for the current financial year.
+
+## 3. Financial Instruments & Cheque Processing
+For automated cheque deposit kiosks or dispute resolution, the OCR must isolate the MICR (Magnetic Ink Character Recognition) band at the bottom of the cheque leaf.
+*   **MICR Band Structure:** 
+    1.  **Cheque Number:** 6 numeric digits.
+    2.  **MICR Code:** 9 numeric digits (City Code + Bank Code + Branch Code).
+    3.  **RBI Account ID:** 6 numeric digits.
+    4.  **Transaction Code:** 2 numeric digits (e.g., 10 for Savings, 11 for Current).
+*   **Validation Rule:** The MICR band utilizes a specialized E-13B font. The agent must apply strict numeric-only filters, rejecting any alphabetic noise.
+
+## 4. Income Verification Documents (Loan Origination)
+For the Advisor Agent's unsecured lending and credit card upgrade workflows:
+*   **Bank Statements:** The agent must extract tabular data (Date, Narration, Debit, Credit, Balance) and identify salary credits via keywords (`SALARY`, `ACH`, `NEFT-EMP`).
+*   **Form 16 / Payslips:** Extract the Gross Monthly Income and the Employer Name for risk underwriting.# Visual Format & Structural Guidelines for Indian Identity Documents
+**Document Version:** 2026.4.1  
+**Classification:** INTERNAL_CONFIDENTIAL  
+**System:** TORII Vision Extraction Engine
+
+## 1. Document Extraction Topologies
+The Vision Agent must perform spatial bounding-box detection to isolate identity fields before character extraction. The background of Indian ID documents often contains micro-printing, holograms, and guilloche patterns that introduce optical noise. 
+
+*   **Aadhaar Card:** 12-digit numeric string formatted with spaces (`XXXX XXXX XXXX`).
+*   **Voter ID (EPIC):** 10-character alphanumeric string. The first 3 characters are alphabetic (State/Constituency code), followed by 7 numeric digits.
+*   **Indian Passport (MRZ):** Two lines of 44 characters at the bottom of the data page. Contains 'P', country code 'IND', surname, given names, passport number, and check digits.
+
+## 2. Permanent Account Number (PAN) Alphanumeric Structure
+The PAN is a ten-character alphanumeric identifier. To prevent OCR hallucination and enforce zero-trust data validation, the Vision Agent must apply the following structural matrix to every extracted PAN string:
+
+*   **Length Constraint:** The extracted string must be exactly 10 characters long.
+*   **Positions 1, 2, and 3 (Sequence):** These must be alphabetical letters representing a running sequence from AAA to ZZZ.
+*   **Position 4 (Entity Status):** This character identifies the legal type of the holder and must explicitly be one of the following:
+    *   **P** — Person (Individual)
+    *   **C** — Company
+    *   **H** — Hindu Undivided Family (HUF)
+    *   **F** — Firm / Limited Liability Partnership
+    *   **A** — Association of Persons (AOP)
+    *   **T** — Trust
+    *   **B** — Body of Individuals (BOI)
+    *   **L** — Local Authority
+    *   **J** — Artificial Juridical Person
+    *   **G** — Government Agency
+*   **Position 5 (Name Anchor):** This must be an alphabetical character representing the first letter of the PAN holder's surname/last name (for individuals), or the first letter of the entity's name (for companies/trusts).
+*   **Positions 6, 7, 8, and 9 (Numerics):** These must be sequential numeric digits running from 0001 to 9999.
+*   **Position 10 (Checksum):** This must be an alphabetic check digit used to cryptographically verify the validity of the previous 9 characters.

@@ -18,8 +18,9 @@ import { consumeQRToken } from '../cache/sessionManager.js';
 import { set as redisSet, get as redisGet, incrWithExpiry } from '../cache/redisClient.js';
 import { uploadDocument } from '../services/storageService.js';
 import { executeParallelSwarm } from '../ai/swarmOrchestrator.js';
-import { computeNameMatchScore } from '../ai/visionAgent.js';
+import { computeNameMatchScore, processVisionOCR } from '../ai/visionAgent.js';
 import { query } from '../db/index.js';
+
 import { emitAuthEvent, AuditEventType } from '../ai/governanceSidecar.js';
 
 /**
@@ -53,9 +54,8 @@ export async function uploadMobileDocument(req, res) {
     return res.status(400).json({ error: 'ERR_MISSING_QR_TOKEN' });
   }
 
-  // Consume the single-use QR token — returns accountId or null.
-  // Derive session_id BEFORE consuming so we have it even if consumption fails.
   const sessionId = deriveSessionId(qr_token);
+  // Consume the single-use QR token upfront — returns accountId or null.
   const accountId = await consumeQRToken(qr_token);
   if (!accountId) {
     return res.status(401).json({ error: 'ERR_INVALID_OR_EXPIRED_QR_TOKEN' });
@@ -78,39 +78,51 @@ export async function uploadMobileDocument(req, res) {
     );
 
     // 2. Run parallel AI swarm: Vision OCR + Watchdog AML + Advisor
-    const { ocr, watchdog, advisor } = await executeParallelSwarm(
+    // Pass sessionId so telemetry can be linked to this session
+    const { ocr, watchdog, advisor, _meta } = await executeParallelSwarm(
       accountId,
       file.buffer,
-      file.mimetype
+      file.mimetype,
+      { sessionId }
     );
 
-    // 3. Clarity gate — if clarity is below threshold AND we haven't hit max retries
-    if (ocr.clarity_score < 0.80 && currentAttempt < MAX_RETRIES - 1) {
-      // Increment retry counter
+    // 3. Quality & Anti-Fraud Gate — use dynamic thresholds from agent_config
+    const clarityThreshold = _meta?.clarity_threshold ?? 0.80;
+    const failedQuality = ocr.clarity_score < clarityThreshold || ocr.tampering_detected || ocr.is_specimen_or_dummy;
+    if (failedQuality && currentAttempt < MAX_RETRIES - 1) {
       await incrWithExpiry(uploadAttemptsKey(accountId), RETRY_TTL);
+
+      const rejectionReason = ocr.rejection_reason || (ocr.clarity_score < 0.80 ? 'IMAGE_CLARITY_BELOW_80_PERCENT' : 'DOCUMENT_DEFACED_OR_INVALID');
 
       return res.status(400).json({
         error: 'RETAKE_IMAGE',
-        message: 'Image clarity is below the required 80% threshold. Please retake the photo.',
+        message: `Verification rejected: ${rejectionReason}. Please retake a clear photo.`,
         confidence: ocr.clarity_score,
+        tampering_detected: Boolean(ocr.tampering_detected),
+        is_specimen_or_dummy: Boolean(ocr.is_specimen_or_dummy),
+        rejection_reason: rejectionReason,
         attempt: currentAttempt + 1,
         max_attempts: MAX_RETRIES,
       });
     }
 
+    // Ticket generation is proceeding — now consume the single-use QR token
+    await consumeQRToken(qr_token);
+
     // 4. Name-match gate (Spec §15 — 3-tier threshold logic)
-    // Only applied when OCR produced a name (skipped for PENDING_MANUAL_REVIEW path).
-    const forceManualReview = ocr.clarity_score < 0.80 && currentAttempt >= MAX_RETRIES - 1;
+    const forceManualReview = failedQuality && currentAttempt >= MAX_RETRIES - 1;
 
     if (!forceManualReview && ocr.name && ocr.name !== 'UNKNOWN') {
-      // Fetch the registered account name for fuzzy comparison
       const accountRows = await query`SELECT full_name FROM accounts WHERE id = ${accountId}`;
       const registeredName = accountRows[0]?.full_name || '';
 
       const nameMatchScore = computeNameMatchScore(ocr.name, registeredName);
 
-      // Hard reject: score below 50% — no ticket created, error returned to mobile
-      if (nameMatchScore < 0.50) {
+      // Use dynamic thresholds from agent_config (fallback to safe defaults)
+      const hardRejectThreshold = _meta?.name_match_hard_reject ?? 0.50;
+      const softFlagThreshold   = _meta?.name_match_soft_flag   ?? 0.80;
+
+      if (nameMatchScore < hardRejectThreshold) {
         return res.status(400).json({
           error: 'MISMATCH_ERROR',
           message: 'The name on the uploaded document does not match the account record. Please visit a branch teller.',
@@ -118,8 +130,6 @@ export async function uploadMobileDocument(req, res) {
         });
       }
 
-      // Soft flag: 50%–79% — ticket is created but marked for teller attention
-      // nameMatchScore is stored on the ticket below
       ocr._nameMatchScore = nameMatchScore;
     }
 
@@ -129,6 +139,7 @@ export async function uploadMobileDocument(req, res) {
 
     // Clear retry counter on success path
     await redisSet(uploadAttemptsKey(accountId), '0', { ex: 60 });
+
 
     // 5. Insert teller ticket (now includes session_id + name_mismatch_score)
     const result = await query`
@@ -145,7 +156,13 @@ export async function uploadMobileDocument(req, res) {
         ${accountId},
         ${status},
         ${documentPath},
-        ${JSON.stringify({ name: ocr.name, pan_number: ocr.pan_number })},
+        ${JSON.stringify({
+          name: ocr.name,
+          pan_number: ocr.pan_number,
+          id_type: ocr.id_type,
+          id_number: ocr.id_number,
+          dob: ocr.dob,
+        })},
         ${ocr.confidence ?? 0.9},
         ${nameMatchScore},
         ${amlFlagged},
@@ -168,6 +185,8 @@ export async function uploadMobileDocument(req, res) {
       {
         ticket_id: ticket.id,
         pan_extracted: ocr.pan_number,
+        id_type: ocr.id_type,
+        id_number: ocr.id_number,
         aml_flagged: amlFlagged,
         clarity_score: ocr.clarity_score,
         name_match_score: nameMatchScore,
@@ -180,6 +199,65 @@ export async function uploadMobileDocument(req, res) {
     res.status(500).json({ error: 'ERR_DOCUMENT_PROCESSING_FAILED', message: err.message });
   }
 }
+
+/**
+ * POST /api/mobile/test-ocr
+ * Dev/Demo endpoint to directly upload an image buffer and analyze it using Gemini 2.5 SDK.
+ */
+export async function testOcrHandler(req, res) {
+  const startTime = Date.now();
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      error: 'ERR_NO_FILE_UPLOADED',
+      message: 'Please upload an image file using the "document" field.',
+    });
+  }
+
+  try {
+    const ocrResult = await processVisionOCR(req.file.buffer, req.file.mimetype);
+    const durationMs = Date.now() - startTime;
+
+    res.status(200).json({
+      success: true,
+      processing_time_ms: durationMs,
+      raw_ocr: ocrResult,
+      db_payload: {
+        name: ocrResult.name,
+        pan_number: ocrResult.pan_number,
+        id_type: ocrResult.id_type,
+        id_number: ocrResult.id_number,
+        dob: ocrResult.dob,
+      },
+      audit_payload: {
+        pan_extracted: ocrResult.pan_number,
+        id_type: ocrResult.id_type,
+        id_number: ocrResult.id_number,
+        clarity_score: ocrResult.clarity_score,
+        confidence: ocrResult.confidence,
+        heuristic_corrections_applied: Boolean(ocrResult.pan_number),
+        privacy_masked: Boolean(ocrResult.id_number && ocrResult.id_number.includes('XXXX')),
+        tampering_detected: Boolean(ocrResult.tampering_detected),
+        rejection_reason: ocrResult.rejection_reason || null,
+      },
+
+      image_metadata: {
+        original_name: req.file.originalname,
+        size_bytes: req.file.size,
+        size_kb: Number((req.file.size / 1024).toFixed(1)),
+        mimetype: req.file.mimetype,
+      },
+    });
+  } catch (err) {
+    console.error('[mobileController] testOcrHandler error:', err.message);
+    res.status(500).json({
+      success: false,
+      error: err.name || 'ERR_GEMINI_OCR_FAILED',
+      message: err.message,
+    });
+  }
+}
+
 
 /**
  * GET /api/mobile/status/:token

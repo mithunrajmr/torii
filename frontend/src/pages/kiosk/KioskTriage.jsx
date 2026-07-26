@@ -25,6 +25,10 @@ import {
   Mic,
   MicOff,
   RefreshCw,
+  ExternalLink,
+  ShieldAlert,
+  Copy,
+  Check,
 } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
 import QRCodeGenerator from '../../components/QRCodeGenerator.jsx';
@@ -49,21 +53,22 @@ export default function KioskTriage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const jwt             = location.state?.jwt || sessionStorage.getItem('kiosk_jwt');
+  const accountStatus   = location.state?.accountStatus || null;
   const failedTxSummary = location.state?.failedTxSummary || null;
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [inputText,    setInputText]    = useState('');
-  const [isLoading,    setIsLoading]    = useState(false);
-  const [answer,       setAnswer]       = useState(null);   // { text, intent, showQR }
-  const [ttsText,      setTtsText]      = useState(null);   // drives VoiceAssistant
-  const [deepLink,     setDeepLink]     = useState('');
-  const [qrKey,        setQrKey]        = useState(0);      // bumped to reset QR countdown
-  const [showQR,       setShowQR]       = useState(false);
-  const [qrExpired,    setQrExpired]    = useState(false);  // QR expired but user stays logged in
-  const [qrLoading,    setQrLoading]    = useState(false);
-  const [isListening,  setIsListening]  = useState(false);  // mic active
-  const [micSupported, setMicSupported] = useState(false);  // browser support flag
+  const [inputText,        setInputText]        = useState('');
+  const [isLoading,        setIsLoading]        = useState(false);
+  const [answer,           setAnswer]           = useState(null);   // { text, intent, showQR }
+  const [ttsText,          setTtsText]          = useState(null);   // drives VoiceAssistant
+  const [deepLink,         setDeepLink]         = useState('');
+  const [qrKey,            setQrKey]            = useState(0);      // bumped to reset QR countdown
+  const [showQR,           setShowQR]           = useState(false);
+  const [qrExpired,        setQrExpired]        = useState(false);  // QR expired but user stays logged in
+  const [qrLoading,        setQrLoading]        = useState(false);
+  const [promptDismissed,  setPromptDismissed]  = useState(false);
+  const [isListening,      setIsListening]      = useState(false);  // mic active
+  const [micSupported,     setMicSupported]     = useState(false);  // browser support flag
 
   const inputRef         = useRef(null);
   const recognitionRef   = useRef(null);
@@ -96,10 +101,6 @@ export default function KioskTriage() {
     if (!jwt) navigate('/kiosk/login', { replace: true });
   }, [jwt, navigate]);
 
-  // ── If PAN issue pre-detected at login, immediately fetch QR ──────────────
-  useEffect(() => {
-    if (failedTxSummary && jwt) fetchQRCode();
-  }, [failedTxSummary, jwt]); // eslint-disable-line
 
   // ── Session heartbeat — refreshes Redis TTL so active sessions stay alive ──
   useEffect(() => {
@@ -284,26 +285,38 @@ export default function KioskTriage() {
           </div>
         </div>
 
-        {/* ── PAN Compliance Banner (conditional) ─────────────────────────── */}
-        {failedTxSummary && (
-          <div className="neo-card p-4 border-l-4 border-amber-500 bg-amber-50">
+        {/* ── PAN Compliance Check & Interactive User Prompt ──────────────── */}
+        {(!accountStatus?.pan_linked || failedTxSummary) && !showQR && !promptDismissed && (
+          <div className="neo-card p-5 border-l-4 border-blue-500 bg-blue-50/75 transition-all">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <ShieldAlert className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-amber-800">Compliance Hold Detected</p>
-                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                  Your deposit of ₹{failedTxSummary.most_recent_amount?.toLocaleString('en-IN')} is on
-                  hold — missing PAN verification for transactions over ₹50,000.
+                <p className="text-sm font-extrabold text-slate-800">
+                  {failedTxSummary ? 'Compliance Hold: PAN Verification Required' : 'PAN Card Linking Recommended'}
                 </p>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                  {failedTxSummary
+                    ? `Your transaction of ₹${failedTxSummary.most_recent_amount?.toLocaleString('en-IN')} requires a verified PAN card. Would you like to generate a QR code to link your PAN card now?`
+                    : `Welcome ${accountStatus?.full_name || ''}! Database verification indicates your account is not currently linked to a verified PAN card. Would you like to generate a QR code and link your account now?`}
+                </p>
+
+                <div className="flex items-center gap-3 mt-4">
+                  <button
+                    onClick={fetchQRCode}
+                    disabled={qrLoading}
+                    className="neo-button px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>{qrLoading ? 'Generating QR…' : '⚡ Yes, Link PAN Card'}</span>
+                  </button>
+                  <button
+                    onClick={() => setPromptDismissed(true)}
+                    className="neo-button px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl cursor-pointer"
+                  >
+                    Not Now
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={fetchQRCode}
-                disabled={qrLoading || !!deepLink}
-                className="neo-button flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 shrink-0 disabled:opacity-50"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>{deepLink ? 'QR Ready' : qrLoading ? 'Generating…' : 'Fix Now'}</span>
-              </button>
             </div>
           </div>
         )}
@@ -311,20 +324,47 @@ export default function KioskTriage() {
         {/* ── QR Code Panel (on-demand) ────────────────────────────────────── */}
         {showQR && (
           <div className="neo-card p-6 flex flex-col items-center text-center">
-            <div className="flex items-center gap-2 text-blue-600 mb-3">
+            <div className="flex items-center gap-2 text-blue-600 mb-2">
               <Smartphone className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-widest">Mobile Handoff</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Mobile Document Upload</span>
             </div>
-            <p className="text-sm text-slate-600 mb-4 max-w-xs">
-              Scan with your smartphone to upload your PAN card. No app installation required.
+            <p className="text-sm text-slate-600 mb-4 max-w-sm">
+              Scan with your mobile camera, or use the direct test link below to upload your PAN card.
             </p>
+
             {deepLink && !qrExpired ? (
-              <QRCodeGenerator
-                key={qrKey}
-                payload={deepLink}
-                timeout={45}
-                onExpire={handleQRExpired}
-              />
+              <div className="flex flex-col items-center gap-4 w-full">
+                <QRCodeGenerator
+                  key={qrKey}
+                  payload={deepLink}
+                  timeout={45}
+                  onExpire={handleQRExpired}
+                />
+
+                {/* Direct Link Options for Mobile Hotspot / Browser Testing */}
+                <div className="neo-inset p-3 rounded-2xl w-full max-w-md flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                  <a
+                    href={deepLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 font-bold hover:underline flex items-center gap-1.5 shrink-0"
+                  >
+                    <span>📱 Open Link in Browser</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(deepLink);
+                      alert('Direct upload URL copied to clipboard!');
+                    }}
+                    className="neo-button px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:text-blue-600 flex items-center gap-1 rounded-lg"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy URL</span>
+                  </button>
+                </div>
+              </div>
             ) : qrExpired ? (
               <div className="flex flex-col items-center gap-3">
                 <div className="neo-inset rounded-3xl bg-white w-[200px] h-[200px] flex flex-col items-center justify-center gap-2 p-4">
@@ -349,6 +389,7 @@ export default function KioskTriage() {
             )}
           </div>
         )}
+
 
         {/* ── FAQ Chat Area ─────────────────────────────────────────────────── */}
         <div className="neo-card p-5 space-y-4">

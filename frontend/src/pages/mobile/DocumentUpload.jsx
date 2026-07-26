@@ -51,18 +51,20 @@ export default function DocumentUpload() {
           const nextRetries = retryCount + 1;
           setRetryCount(nextRetries);
           if (nextRetries >= 3) {
-            setError('Image clarity low. Defaulting ticket to manual teller review.');
+            setError('Verification limit reached. Document routed to bank teller for manual review.');
             if (data.ticket_id) {
               setTimeout(() => {
                 navigate(`/mobile/${token}/status`, { state: { ticketId: data.ticket_id } });
               }, 2500);
             }
           } else {
-            setError(`Image blurry or unclear (${data.confidence ? (data.confidence * 100).toFixed(0) : 0}% clarity). Retake attempt ${nextRetries}/3.`);
+            const reasonMsg = data.message || `Document unreadable or defaced (${data.confidence ? (data.confidence * 100).toFixed(0) : 0}% clarity).`;
+            setError(`${reasonMsg} (Attempt ${nextRetries}/3)`);
             setSelectedFile(null);
             setPreviewUrl(null);
           }
-        } else if (data.error === 'MISMATCH_ERROR') {
+        }
+ else if (data.error === 'MISMATCH_ERROR') {
           setError('Name on document does not match account records. Please present ID to a bank teller.');
         } else {
           setError(data.message || 'Upload failed. Please try again.');

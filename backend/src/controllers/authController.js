@@ -243,11 +243,26 @@ export async function verifyOTP(req, res) {
     return res.status(503).json({ error: 'ERR_SESSION_STORE_UNAVAILABLE' });
   }
 
-  res.status(200).json({ jwt: token, failed_tx_summary: failedTxSummary ?? null });
+  // Look up account details from database
+  const accountRows = await query`
+    SELECT id, account_number, full_name, pan_linked, pan_number FROM accounts WHERE id = ${account.id} LIMIT 1
+  `;
+  const accountDetails = accountRows[0] || {};
+
+  res.status(200).json({
+    jwt: token,
+    failed_tx_summary: failedTxSummary ?? null,
+    account_status: {
+      pan_linked: Boolean(accountDetails.pan_linked),
+      pan_number: accountDetails.pan_number || null,
+      full_name: accountDetails.full_name || 'Valued Customer',
+    },
+  });
 
   // Fire-and-forget audit
   emitAuthEvent(AuditEventType.AUTH_SUCCESS, { account_number }, account.id);
 }
+
 
 // ─── POST /api/auth/qr/generate ───────────────────────────────────────────────
 
@@ -264,13 +279,16 @@ export async function generateQRToken(req, res) {
 
   await createQRToken(token, accountId);
 
-  const deepLinkUrl = `https://${process.env.DOMAIN}/mobile/${token}`;
+  const host = req.headers.host || process.env.DOMAIN || 'localhost:3000';
+  const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+  const deepLinkUrl = `${protocol}://${host}/mobile/${token}`;
 
   res.status(200).json({ qr_token: token, deep_link_url: deepLinkUrl });
 
   // Fire-and-forget audit
   emitAuthEvent(AuditEventType.QR_TOKEN_GENERATED, { deep_link_url: deepLinkUrl }, accountId);
 }
+
 
 // ─── GET /api/auth/session/validate ───────────────────────────────────────────
 

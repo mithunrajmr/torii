@@ -3,10 +3,26 @@ CREATE TABLE accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     account_number VARCHAR(10) UNIQUE NOT NULL,
+    full_name VARCHAR(255) NOT NULL,     -- added via 003_agent_architecture.sql; customer display name; used for OCR name-match scoring in Vision Agent and radar alert payload
     email VARCHAR(255) UNIQUE NOT NULL,  -- added via 002_accounts_add_email.sql; used for OTP dispatch and masked_email response
     balance DECIMAL(12, 2) DEFAULT 0.00,
     pan_linked BOOLEAN DEFAULT FALSE,
-    pan_number VARCHAR(10) NULL
+    pan_number VARCHAR(10) NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP  -- added via 005_accounts_created_at.sql
+);
+
+-- CBS Transaction Ledger
+-- status column used by /api/system/radar to filter FAILED transactions.
+-- NOTE: 001_initial_schema.sql does not include a status column; the radar
+-- query falls back to the error_code filter. Add a migration to add status
+-- if explicit FAILED/SUCCESS filtering is needed beyond error_code presence.
+CREATE TABLE transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID REFERENCES accounts(id),
+    amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(20) NULL,           -- 'FAILED' | 'SUCCESS' — used by radar endpoint
+    error_code VARCHAR(50) NULL,       -- e.g. 'ERR_PAN_MISSING_OVER_50K' when blocked
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- HITL Teller Queue
@@ -21,7 +37,7 @@ CREATE TABLE teller_tickets (
     ai_confidence FLOAT NULL,
     name_mismatch_score FLOAT NULL,
     aml_flagged BOOLEAN DEFAULT FALSE,
-    reviewed_by UUID NULL,
+    reviewed_by UUID NULL,             -- actor UUID of approving/rejecting teller; NULL when teller JWT carries a non-UUID sub (e.g. 'TELLER001' from staff-login)
     rejection_reason VARCHAR(255) NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -33,4 +49,48 @@ CREATE TABLE audit_logs (
     payload_snapshot JSONB NOT NULL,
     actor_id UUID NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- AI Agent Swarm Telemetry
+-- Written fire-and-forget by swarmOrchestrator.js after each executeParallelSwarm() call.
+-- One row per agent leg per upload session. PII is redacted via governanceSidecar.redactPayload
+-- before insertion. teller_outcome and teller_override are backfilled by tellerController.js
+-- on teller approve/reject to close the HITL feedback loop (TASK-INT-302).
+CREATE TABLE agent_performance_log (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_name   VARCHAR(20) NOT NULL,     -- 'VISION_OCR' | 'WATCHDOG_AML' | 'ADVISOR'
+    ticket_id    UUID NULL REFERENCES teller_tickets(id),  -- NULL until ticket is inserted
+    session_id   VARCHAR(64) NULL,         -- SHA-256 derived from QR token; links legs to one upload session
+    input_summary  JSONB NOT NULL,         -- PII-free snapshot: image_size_kb, mime_type, tx counts etc.
+    output_summary JSONB NOT NULL,         -- PII-redacted snapshot: confidence, risk_level, offer_type etc.
+    teller_outcome VARCHAR(20) NULL,       -- 'APPROVED' | 'REJECTED' | 'ESCALATED' — backfilled on teller action
+    teller_override BOOLEAN NULL,          -- true when teller overrides a high-confidence AI result
+    created_at   TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS apl_agent_name_idx  ON agent_performance_log(agent_name);
+CREATE INDEX IF NOT EXISTS apl_ticket_id_idx   ON agent_performance_log(ticket_id);
+CREATE INDEX IF NOT EXISTS apl_session_id_idx  ON agent_performance_log(session_id);
+CREATE INDEX IF NOT EXISTS apl_created_at_idx  ON agent_performance_log(created_at);
+
+-- Dynamic Agent Configuration
+-- Read by backend/src/services/configService.js on startup and cached for 5 minutes.
+-- Allows runtime tuning of Vision OCR, Watchdog AML, and Advisor thresholds without
+-- redeployment. All columns are nullable — null values leave the in-code defaults in place.
+-- Safe defaults (used when table is empty or DB is unavailable):
+--   VISION_OCR:   clarity_threshold=0.80, confidence_floor=0.60,
+--                 name_match_hard_reject=0.50, name_match_soft_flag=0.80
+--   WATCHDOG_AML: aml_tx_count_threshold=3, aml_amount_threshold=200000, confidence_floor=0.60
+--   ADVISOR:      confidence_floor=0.60
+CREATE TABLE agent_config (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_name VARCHAR(50) UNIQUE NOT NULL,  -- 'VISION_OCR' | 'WATCHDOG_AML' | 'ADVISOR'
+    clarity_threshold       FLOAT NULL,      -- VISION_OCR: minimum image clarity score (0–1)
+    confidence_floor        FLOAT NULL,      -- all agents: minimum acceptable confidence score
+    name_match_hard_reject  FLOAT NULL,      -- VISION_OCR: Levenshtein score below which ticket is hard-rejected
+    name_match_soft_flag    FLOAT NULL,      -- VISION_OCR: score below which name mismatch is soft-flagged
+    aml_tx_count_threshold  INTEGER NULL,    -- WATCHDOG_AML: transaction count that triggers structuring flag
+    aml_amount_threshold    DECIMAL(12,2) NULL, -- WATCHDOG_AML: cumulative amount that triggers structuring flag
+    prompt_suffix           TEXT NULL,       -- optional prompt append for any agent
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

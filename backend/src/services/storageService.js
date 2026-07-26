@@ -9,16 +9,22 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 const BUCKET_NAME = 'pan-documents';
 
+// Local memory store for dev environments without live Supabase storage credentials
+const localImageStore = new Map();
+
 /**
  * Upload an identity document to private Supabase storage bucket.
  */
 export async function uploadDocument(fileName, fileBuffer, mimeType = 'image/jpeg') {
-  if (process.env.NODE_ENV === 'test' || !process.env.SUPABASE_URL) {
-    // Mock storage path for tests / dev fallback
-    return `pan-documents/mock_${Date.now()}_${fileName}`;
+  const path = `${Date.now()}_${fileName}`;
+
+  if (!process.env.SUPABASE_URL || process.env.SUPABASE_URL.includes('mock.supabase.co')) {
+    // Dev/Fallback: convert uploaded buffer into base64 data URL for instant teller inspection
+    const dataUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+    localImageStore.set(path, dataUrl);
+    return path;
   }
 
-  const path = `${Date.now()}_${fileName}`;
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
     .upload(path, fileBuffer, {
@@ -37,8 +43,16 @@ export async function uploadDocument(fileName, fileBuffer, mimeType = 'image/jpe
  * Generate a temporary 300-second (5 minute) signed read URL for staff view.
  */
 export async function getSignedUrl(documentPath) {
-  if (process.env.NODE_ENV === 'test' || !process.env.SUPABASE_URL) {
-    // Return sample image for demo / testing
+  // If stored in local dev cache, return base64 data URL directly
+  if (localImageStore.has(documentPath)) {
+    return localImageStore.get(documentPath);
+  }
+
+  if (documentPath?.startsWith('data:')) {
+    return documentPath;
+  }
+
+  if (!process.env.SUPABASE_URL || process.env.SUPABASE_URL.includes('mock.supabase.co')) {
     return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop';
   }
 
@@ -52,3 +66,4 @@ export async function getSignedUrl(documentPath) {
 
   return data.signedUrl;
 }
+

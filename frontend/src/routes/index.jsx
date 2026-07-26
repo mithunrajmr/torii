@@ -1,9 +1,12 @@
 // frontend/src/routes/index.jsx
-// Three base workspaces: /kiosk, /mobile/:token, /teller
+// All workspaces: /, /kiosk, /mobile/:token, /teller, /sandbox
 // Each workspace has its own error boundary so a crash in one never affects another.
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+
+// Landing Hub (root)
+const LandingMaster = lazy(() => import('../pages/landing/LandingMaster.jsx'));
 
 // Kiosk workspace
 const KioskLogin  = lazy(() => import('../pages/kiosk/KioskLogin.jsx'));
@@ -17,6 +20,13 @@ const StatusPoller   = lazy(() => import('../pages/mobile/StatusPoller.jsx'));
 const TellerLogin    = lazy(() => import('../pages/teller/TellerLogin.jsx'));
 const Dashboard      = lazy(() => import('../pages/teller/Dashboard.jsx'));
 const TellerAccounts = lazy(() => import('../pages/teller/TellerAccounts.jsx'));
+
+// Sandbox control plane (dev/demo only)
+const SandboxDashboard = lazy(() => import('../pages/sandbox/SandboxDashboard.jsx'));
+
+// Gemini OCR Multimodal Lab (Demo Studio)
+const OcrDemoPage = lazy(() => import('../pages/ocr/OcrDemoPage.jsx'));
+
 
 function WorkspaceLoader() {
   return (
@@ -46,8 +56,17 @@ export default function AppRoutes() {
         <Route path="/teller"           element={<Navigate to="/teller/login" replace />} />
         <Route path="/teller/*"         element={<Navigate to="/teller/login" replace />} />
 
-        {/* Default */}
-        <Route path="/" element={<Navigate to="/kiosk/login" replace />} />
+        {/* Root — Master Landing Hub */}
+        <Route path="/" element={<LandingMaster />} />
+
+        {/* Mobile workspace root (no token — show placeholder) */}
+        <Route path="/mobile" element={<Navigate to="/kiosk" replace />} />
+
+        {/* Sandbox control plane — visible in all envs for demo purposes */}
+        <Route path="/sandbox" element={<SandboxDashboard />} />
+
+        {/* Gemini OCR Multimodal Lab (Demo Studio) */}
+        <Route path="/ocr-demo" element={<OcrDemoPage />} />
       </Routes>
     </Suspense>
   );

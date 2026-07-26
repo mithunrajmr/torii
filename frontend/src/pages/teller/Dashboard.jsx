@@ -301,31 +301,56 @@ export default function Dashboard() {
 
                   {/* AI Extraction Bento Table */}
                   <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">AI Swarm Verification Output</h4>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gemini Vision OCR Verification Output</h4>
                     
                     <div className="neo-inset p-4 rounded-2xl space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-300">
                         <span className="text-slate-500 font-medium">Extracted Name:</span>
-                        <span className="font-bold text-slate-800">{selectedTicket.ocr_data?.name || 'N/A'}</span>
+                        <span className="font-bold text-slate-800">{selectedTicket.ocr_data?.name || 'UNKNOWN'}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-300">
                         <span className="text-slate-500 font-medium">Extracted PAN:</span>
-                        <span className="font-mono font-bold text-blue-600">{selectedTicket.ocr_data?.pan_number || 'N/A'}</span>
+                        <span className="font-mono font-bold text-blue-600">{selectedTicket.ocr_data?.pan_number || selectedTicket.ocr_data?.id_number || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Vision Confidence:</span>
-                        <span className="font-bold text-emerald-600">
-                          {selectedTicket.ai_confidence ? `${(selectedTicket.ai_confidence * 100).toFixed(0)}%` : 'Manual Review'}
+                        <span className="text-slate-500 font-medium">Doc Type / DOB:</span>
+                        <span className="font-bold text-slate-700">
+                          {selectedTicket.ocr_data?.id_type || 'PAN'} · {selectedTicket.ocr_data?.dob || 'N/A'}
                         </span>
                       </div>
-                      <div className="flex justify-between py-1">
+                      <div className="flex justify-between py-1 border-b border-slate-300">
+                        <span className="text-slate-500 font-medium">Clarity / Confidence:</span>
+                        <span className="font-bold text-emerald-600">
+                          {selectedTicket.ocr_data?.clarity_score ? `${(selectedTicket.ocr_data.clarity_score * 100).toFixed(0)}%` : selectedTicket.ai_confidence ? `${(selectedTicket.ai_confidence * 100).toFixed(0)}%` : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-300">
                         <span className="text-slate-500 font-medium">Name Match Score:</span>
                         <span className="font-bold text-slate-800">
                           {selectedTicket.name_mismatch_score ? `${(selectedTicket.name_mismatch_score * 100).toFixed(0)}%` : '100%'}
                         </span>
                       </div>
+                      <div className="flex justify-between py-1 border-b border-slate-300">
+                        <span className="text-slate-500 font-medium">Tampering / Defacement:</span>
+                        <span className={`font-bold ${selectedTicket.ocr_data?.tampering_detected ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {selectedTicket.ocr_data?.tampering_detected ? '⚠️ DETECTED' : '✓ PASSED'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-300">
+                        <span className="text-slate-500 font-medium">Specimen Check:</span>
+                        <span className={`font-bold ${selectedTicket.ocr_data?.is_specimen_or_dummy ? 'text-red-600' : 'text-emerald-600'}`}>
+                          {selectedTicket.ocr_data?.is_specimen_or_dummy ? '⚠️ SPECIMEN / DUMMY' : '✓ GENUINE'}
+                        </span>
+                      </div>
+                      {selectedTicket.ocr_data?.rejection_reason && (
+                        <div className="flex justify-between py-1 text-red-600 bg-red-50 p-2 rounded-lg mt-1">
+                          <span className="font-bold">Rejection Flag:</span>
+                          <span className="font-semibold text-right">{selectedTicket.ocr_data.rejection_reason}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+
                 </div>
 
                 {/* HITL Action Controls */}

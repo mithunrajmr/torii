@@ -130,12 +130,19 @@ export async function createQRToken(token, accountId) {
 }
 
 /**
+ * Retrieve accountId bound to a QR token WITHOUT deleting it.
+ * Used during document upload attempts so retries do not invalidate the token.
+ *
+ * @param {string} token
+ * @returns {Promise<string|null>} accountId or null
+ */
+export async function getQRToken(token) {
+  return get(keys.qr(token));
+}
+
+/**
  * Consume a QR token atomically: returns the bound accountId on first call,
  * then deletes the key so all subsequent calls return null (non-replayable).
- *
- * Note: Upstash Redis REST client does not expose GETDEL natively, so we
- * perform GET then DEL. The token is single-use by design — any race condition
- * window is acceptable given the kiosk physical context.
  *
  * @param {string} token
  * @returns {Promise<string|null>} accountId on first call, null thereafter
@@ -160,5 +167,7 @@ export default {
   getKioskSession,
   deleteKioskSession,
   createQRToken,
+  getQRToken,
   consumeQRToken,
 };
+

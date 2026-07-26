@@ -1,0 +1,104 @@
+Adding Section (G) and the Floating Bottom-Right Assistant elevates this landing page from a static navigation hub into a live, breathing AI control tower.
+
+Here is why this is brilliant: Section (G) proves your "Proactive Interception" concept before the user even clicks a button. When you seed a persona (like Account 1000000001) in your Sandbox, Section (G) will instantly light up with the detected failure, showing the system has already diagnosed the issue and pre-staged the solution!
+
+Here is the updated Neo-Bento Master Grid Architecture, incorporating your new elements while strictly honoring ui-steering.md.
+
+The Updated Neo-Bento Grid Layout (/)
+Plaintext
++-----------------------------------+--------------------+--------------------+
+|                                   |                    |                    |
+|  1. HERO / SYSTEM PULSE           |  2. WORKSPACE      |  3. WORKSPACE      |
+|     (Span: 2 Col x 2 Row)         |     KIOSK PORTAL   |     MOBILE PWA     |
+|     - TORII Engine Overview       |     (Span: 1x1)    |     (Span: 1x1)    |
+|     - Live AI Swarm Telemetry     +--------------------+--------------------+
+|     - "Launch Triage" Primary CTA |  4. WORKSPACE      |  5. WORKSPACE      |
+|                                   |     TELLER HITL    |     DEV SANDBOX    |
+|                                   |     (Span: 1x1)    |     (Span: 1x1)    |
++-----------------------------------+--------------------+--------------------+
+|                                                                             |
+|  [NEW] G. PROACTIVE INTERCEPTION RADAR ("Ready to Solve" Active Alert)      |
+|           (Span: 4 Col x 1 Row — High-Visibility Banner Card)               |
+|           - Displays active failed tx from DB (e.g., Aravind's ₹50k PAN Block)|
+|           - Pulsing amber/emerald accent indicating AI pre-verification     |
+|           - 1-Click [Execute Agentic Fix ⚡] auto-launches exact resolution  |
++-----------------------------------------------------------------------------+
+|                                                                             |
+|  6. THE 5 OMNI-ISSUE BANKING DOMAINS (Interactive Service Showcase)         |
+|                                                                             |
+|  +-----------------------+  +-----------------------+  +-----------------+  |
+|  | A. Compliance & Re-KYC|  | B. Payment Blocks     |  | C. Mandates     |  |
+|  |    (Span: 1 Col)      |  |    (Span: 1 Col)      |  |    (Span: 1 Col)|  |
+|  +-----------------------+  +-----------------------+  +-----------------+  |
+|  | D. Dispute Resolution |  | E. Credit Origination |  | F. Live Audit   |  |
+|  |    (Span: 1 Col)      |  |    (Span: 1 Col)      |  |    Well (1 Col) |  |
+|  +-----------------------+  +-----------------------+  +-----------------+  |
++-----------------------------------------------------------------------------+
+
+                                               [NEW] 💬 TORII COPILOT WIDGET 
+                                               (Floating Bottom-Right Neumorphic Orb)
+Deep Dive: The New Additions
+Section G: Proactive Interception Radar ("Ready to Solve")
+Positioning: Placed directly beneath the Hero/Workspace grid, spanning the full width (col-span-1 md:col-span-3 lg:col-span-4). It acts as the bridge between the system portals and the service domains.
+
+Visual Style: An extruded neumorphic banner card (rounded-2xl p-6 shadow-[8px_8px_16px_#cbced1,-8px_-8px_16px_#ffffff]) featuring a subtle pulsing status border (Amber for Action Required, Emerald for Pre-Verified).
+
+Dynamic Data Binding (The Magic):
+
+It polls /api/sandbox/ledger or an alert endpoint every 5 seconds.
+
+When no issue is detected: It displays a calm inset well: "🟢 System Radar Active: Monitoring branch ledger for high-friction customer roadblocks... Zero unassisted bottlenecks detected."
+
+When an issue exists in the DB (e.g., you seeded PAN_BLOCKED): The card dynamically transforms!
+
+Headline: "⚠️ Actionable Bottleneck Detected — Pre-Resolution Ready"
+
+Inset Data Well: Displays the exact intercepted metadata: Account: 1000000001 (Aravind Kumar) | Error: ERR_PAN_MISSING_OVER_50K | AI Diagnosis: PAN Unlinked on ₹50,000 Cash Deposit.
+
+Action Button: A high-contrast primary CTA button reading [⚡ Execute Agentic Fix Now]. Clicking this instantly logs the user into /kiosk or generates the exact mobile handoff QR code!
+
+Floating Bottom-Right Assistant: The "TORII Copilot" Widget
+Positioning: Fixed to the bottom-right viewport (fixed bottom-8 right-8 z-50).
+
+Visual Style (Collapsed): A floating neumorphic circular orb (w-16 h-16 rounded-full bg-[#e8ecf2] shadow-[8px_8px_16px_#cbced1,-8px_-8px_16px_#ffffff]) with an animated AI waveform or sparkle icon. When hovered, it gently elevates.
+
+Visual Style (Expanded): When clicked, it expands into an extruded neumorphic chat drawer (w-80 md:w-96 rounded-3xl bg-[#e8ecf2] p-6 shadow-[12px_12px_24px_#cbced1,-12px_-12px_24px_#ffffff]).
+
+Functionality & Wiring:
+
+Omni-Issue Quick Triage: A customer or judge can type any banking issue in plain English (e.g., "My debit card got blocked while traveling in Dubai" or "I need to add my wife as a nominee").
+
+watsonx Intent Routing: It connects directly to your existing intentRouter.js and faqAgent.js.
+
+Smart Actions: Instead of just giving text answers, the Copilot responds with Neo-Bento Action Chips! For example, if they ask about a blocked card, the assistant replies: "I can help unblock your card instantly using our security verification swarm. Click below to start:" followed by an extruded button that auto-launches the corresponding triage workflow.
+
+How This Creates an Unbeatable Hackathon Demo
+Imagine demonstrating this to judges:
+
+You start on the Main Landing Page (/). Section (G) shows a calm green radar: "Zero unassisted bottlenecks detected."
+
+You click Card A (Compliance & Re-KYC) in the domain showcase and hit [Test This Scenario].
+
+Instantly, Section (G) transforms on screen! It lights up amber, displaying: "⚠️ Actionable Bottleneck Detected: Aravind's ₹50,000 deposit failed 2 seconds ago due to missing PAN."
+
+You tell the judges: "Notice how we didn't have to wait for the customer to complain to a teller. The TORII Radar intercepted the ledger failure in real time. Let's hit [Execute Agentic Fix Now]."
+
+You click the button in Section (G), scan the QR on your phone, and complete the 45-second AI resolution.
+
+Finally, for Q&A, you open the TORII Copilot bottom-right widget and let a judge type whatever random banking problem they want, showing off your multi-domain AI routing!
+
+4. Mapping: The 5 Omni-Issue Cards to Persona Triggers
+When the user clicks [Test This Scenario] on a domain card in DomainShowcase.jsx, it must execute the exact endpoint mapped below:
+
+Compliance & Re-KYC: Triggers POST /api/sandbox/seed/PAN_BLOCKED
+
+Payment Blocks & Security: Triggers POST /api/sandbox/seed/AML_SMURFER
+
+Complex Mandates: Triggers POST /api/sandbox/seed/SIGN_MISMATCH
+
+Dispute Resolution: Triggers POST /api/sandbox/seed/DORMANT_ACC
+
+Credit Origination: Triggers POST /api/sandbox/seed/CLEAN_HNW
+
+
+---

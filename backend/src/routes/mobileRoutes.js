@@ -1,9 +1,10 @@
 // backend/src/routes/mobileRoutes.js
 import { Router } from 'express';
 import multer from 'multer';
-import { uploadMobileDocument, getMobileStatus } from '../controllers/mobileController.js';
+import { uploadMobileDocument, getMobileStatus, testOcrHandler } from '../controllers/mobileController.js';
 
 const router = Router();
+
 
 // Store file in memory buffer so visionAgent can pass it directly to Orchestrate.
 // 10 MB limit matches the frontend's stated maximum.
@@ -30,6 +31,8 @@ function handleMulterError(err, req, res, next) {
 }
 
 router.post('/upload', upload.single('document'), handleMulterError, uploadMobileDocument);
+router.post('/test-ocr', upload.single('document'), handleMulterError, testOcrHandler);
 router.get('/status/:token', getMobileStatus);
+
 
 export default router;

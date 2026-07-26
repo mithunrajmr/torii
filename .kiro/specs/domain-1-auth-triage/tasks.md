@@ -14,13 +14,13 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Create `backend/src/db/migrations/002_accounts_add_email.sql`
     - _Requirements: 2.1, 2.5, 9.1_
 
-  - [~] 1.2 Implement `redisClient.js` — Upstash REST client wrapper
+  - [ ] 1.2 Implement `redisClient.js` — Upstash REST client wrapper
     - Create `backend/src/cache/redisClient.js`
     - Export a configured Upstash Redis REST client using `REDIS_URL` and `REDIS_TOKEN` environment variables
     - Expose `set(key, value, options)`, `get(key)`, `del(key)`, `ttl(key)`, and `incrWithExpiry(key, ex)` wrappers — `incrWithExpiry` uses an INCR+EXPIRE pipeline for atomic counter increment with TTL reset; all other modules must use this wrapper, never the SDK directly
     - _Requirements: 2.4, 3.6, 5.2, 7.3_
 
-  - [~] 1.3 Implement `sessionManager.js` — all OTP, session, and QR token TTL functions
+  - [ ] 1.3 Implement `sessionManager.js` — all OTP, session, and QR token TTL functions
     - Create `backend/src/cache/sessionManager.js`
     - Implement OTP lifecycle: `setOTP(accountId, otp)` with EX 300, `getOTP(accountId)`, `deleteOTP(accountId)`
     - Implement OTP lockout: `incrementOTPAttempts(accountId)` returning new count with EX 300, `lockOTPEntry(accountId)` with EX 300, `isOTPLocked(accountId)` returning boolean
@@ -36,7 +36,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - **Property 3: QR token is single-use** — generator: random URL-safe base64 tokens, random accountId UUIDs; assert first consumeQRToken returns accountId, second returns null — **Validates: Requirements 5.6**
     - **Property 7: Redis session deletion is the authoritative gate** — generator: random jti UUIDs; assert getKioskSession returns null after deleteKioskSession — **Validates: Requirements 7.3, 7.4**
 
-  - [~] 1.5 Scaffold React Router routes for `/kiosk/login` and `/kiosk/triage`
+  - [ ] 1.5 Scaffold React Router routes for `/kiosk/login` and `/kiosk/triage`
     - Update `frontend/src/routes/index.jsx` to include `<Route path="/kiosk/login" element={<KioskLogin />} />` and `<Route path="/kiosk/triage" element={<KioskTriage />} />`
     - Create stub `frontend/src/pages/kiosk/KioskLogin.jsx` and `frontend/src/pages/kiosk/KioskTriage.jsx` with placeholder renders
     - Verify React Router navigation between the two routes works before proceeding
@@ -46,7 +46,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
   - Ensure all Wave 1 tests pass. Confirm `redisClient.js` and `sessionManager.js` unit/property tests are green. Ask the user if questions arise before proceeding to backend auth.
 
 - [ ] 3. Wave 2 — Backend Auth: authController, authRoutes, governanceSidecar
-  - [~] 3.1 Implement OTP request handler in `authController.js`
+  - [ ] 3.1 Implement OTP request handler in `authController.js`
     - Create `backend/src/controllers/authController.js`
     - Implement `requestOTP(req, res)`: validate `account_number` is 10 numeric digits; query `accounts` table for matching record; return 404 `ERR_ACCOUNT_NOT_FOUND` if not found
     - Generate cryptographically random 6-digit OTP using `crypto.randomInt(100000, 999999)`
@@ -57,7 +57,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Enforce ≤ 2000 ms total SLA (Req 2.6)
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-  - [~] 3.2 Implement OTP verify handler in `authController.js`
+  - [ ] 3.2 Implement OTP verify handler in `authController.js`
     - Implement `verifyOTP(req, res)`: validate `account_number` and `otp` present; look up accountId from `accounts`; check `isOTPLocked` first — return 401 `ERR_OTP_LOCKED` immediately if locked
     - Call `getOTP(accountId)`: return 401 `ERR_OTP_EXPIRED` if null; compare OTP — on mismatch call `incrementOTPAttempts`, lock at count 3 via `lockOTPEntry`, return 401 `ERR_OTP_INVALID`
     - On match: call `deleteOTP(accountId)`; query `transactions` for `ERR_PAN_MISSING_OVER_50K` records in last 24 hours scoped to `account_id` — build `failed_tx_summary` or null; enforce ≤ 1500 ms SLA on CBS query with graceful degradation to null on timeout
@@ -85,19 +85,19 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Create `tests/api/panThreshold.property.test.js` using fast-check
     - **Property 5: PAN threshold rule is a strict Boolean boundary** — generator: random amount values in [0, 200000] including boundaries 50000 and 50001, random pan_linked boolean; assert shouldBlockTransaction returns true iff amount > 50000 AND pan_linked is false — **Validates: Requirements 8.1, 8.2**
 
-  - [~] 3.6 Implement QR token generation endpoint in `authController.js`
+  - [ ] 3.6 Implement QR token generation endpoint in `authController.js`
     - Implement `generateQRToken(req, res)`: validate Bearer JWT via RBAC middleware (role `CUSTOMER`); verify `getKioskSession(jti)` is present — return 401 `ERR_SESSION_EXPIRED` if absent
     - Generate URL-safe base64 token from `crypto.randomBytes(32)`
     - Call `createQRToken(token, accountId)`; compute `deep_link_url` as `https://${process.env.DOMAIN}/mobile/${token}`; return `200 { qr_token, deep_link_url }`
     - Emit `QR_TOKEN_GENERATED` event fire-and-forget
     - _Requirements: 5.1, 5.2, 5.3, 5.5_
 
-  - [~] 3.7 Implement session validate and DELETE session endpoints in `authController.js`
+  - [ ] 3.7 Implement session validate and DELETE session endpoints in `authController.js`
     - Implement `validateSession(req, res)`: extract jti from JWT; call `getKioskSession(jti)` — return `200 { valid: true }` if present, `401 ERR_SESSION_EXPIRED` if null
     - Implement `deleteSession(req, res)`: extract jti; call `deleteKioskSession(jti)`; emit `SESSION_EXPIRED` event with reason (`QR_TIMEOUT` | `SESSION_TIMEOUT` | `MANUAL_NAVIGATE`) fire-and-forget; return `204 No Content`
     - _Requirements: 6.4, 6.5, 7.1, 7.2, 7.4_
 
-  - [~] 3.8 Wire all routes in `authRoutes.js` with RBAC middleware
+  - [ ] 3.8 Wire all routes in `authRoutes.js` with RBAC middleware
     - Create `backend/src/routes/authRoutes.js`
     - Mount `POST /api/auth/otp/request` — `requestOTP` (public, no auth)
     - Mount `POST /api/auth/otp/verify` — `verifyOTP` (public, no auth)
@@ -108,7 +108,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Register `authRoutes` in the main Express app entry point
     - _Requirements: 3.2, 7.4_
 
-  - [~] 3.9 Implement `governanceSidecar.js` — PII redaction and audit_logs insert with retry
+  - [ ] 3.9 Implement `governanceSidecar.js` — PII redaction and audit_logs insert with retry
     - Create `backend/src/ai/governanceSidecar.js`
     - Implement `redactPAN(payload)`: deep-clone payload object; replace all strings matching `/[A-Z]{5}\d{4}[A-Z]/g` with `"XXXXX-1234-X"` at arbitrary nesting depth
     - Implement `redactAccountNumber(payload)`: replace all 10-digit numeric strings with their last 4 digits
@@ -126,7 +126,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
   - Ensure all Wave 2 tests pass. Confirm OTP request/verify/QR/session endpoints respond correctly via Supertest. Confirm governanceSidecar redaction properties are green. Ask the user if questions arise.
 
 - [ ] 5. Wave 3 — Frontend: KioskLogin.jsx and KioskTriage.jsx
-  - [~] 5.1 Implement `KioskLogin.jsx` — numeric keypad, masked digit display, OTP phase, error states
+  - [ ] 5.1 Implement `KioskLogin.jsx` — numeric keypad, masked digit display, OTP phase, error states
     - Replace stub with full implementation in `frontend/src/pages/kiosk/KioskLogin.jsx`
     - Render Neo-Bento page layout: `bg-[#e8ecf2]` canvas, `grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 p-6`
     - Render numeric keypad with digits 0–9, backspace, and clear keys as extruded Neo-Bento buttons: `shadow-[8px_8px_16px_#cbced1,-8px_-8px_16px_#ffffff]` resting, `shadow-[inset_4px_4px_8px_#cbced1,inset_-4px_-4px_8px_#ffffff]` active; `focus-visible:ring-2 focus-visible:ring-blue-600` on all keys
@@ -152,7 +152,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Create `tests/frontend/kioskLoginKeypad.property.test.js` using fast-check
     - **Property 9: Numeric keypad rejects all non-numeric input without side effects** — generator: random strings containing at least one non-numeric character (letters, symbols, punctuation, unicode); assert after processing through onKeyPress handler the accountNumber state is unchanged in length and contains no non-numeric characters — **Validates: Requirements 1.4**
 
-  - [~] 5.4 Implement `KioskTriage.jsx` — proactive diagnosis card, Voice Visualiser, QR canvas hero cell, 45-second countdown, session validation loop, auto-reset
+  - [ ] 5.4 Implement `KioskTriage.jsx` — proactive diagnosis card, Voice Visualiser, QR canvas hero cell, 45-second countdown, session validation loop, auto-reset
     - Replace stub with full implementation in `frontend/src/pages/kiosk/KioskTriage.jsx`
     - On mount: read `location.state.jwt` and `location.state.failedTxSummary` from React Router; if JWT is absent, immediately redirect to `/kiosk/login`
     - On mount: POST to `/api/auth/qr/generate` with Bearer JWT; store returned `qr_token` and `deep_link_url` in state; render QR code canvas using `qrcode` library encoding the deep link URL
@@ -183,7 +183,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
   - Ensure all Wave 3 component tests pass. Confirm KioskLogin and KioskTriage render correctly with mocked API responses. Ask the user if questions arise before proceeding to integration tests.
 
 - [ ] 7. Wave 4 — Tests: integration and E2E
-  - [~] 7.1 Write unit tests for `governanceSidecar.js` redaction and retry logic
+  - [ ] 7.1 Write unit tests for `governanceSidecar.js` redaction and retry logic
     - Create `tests/api/governanceSidecar.unit.test.js` using Vitest with mocked Supabase client
     - Test: raw PAN string "ABCDE1234F" in payload is masked to "XXXXX-1234-X" in payload_snapshot
     - Test: full 10-digit account number in payload is masked to last 4 digits
@@ -192,7 +192,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Test: primary response is not blocked when audit log insert fails all retries
     - _Requirements: 9.2, 9.3, 9.4, 9.5_
 
-  - [~] 7.2 Write unit tests for `sessionManager.js` boundary cases
+  - [ ] 7.2 Write unit tests for `sessionManager.js` boundary cases
     - Create `tests/cache/sessionManager.unit.test.js` using Vitest with mock redisClient
     - Test: consumeQRToken second call returns null (single-use)
     - Test: setOTP passes EX 300 to redisClient.set
@@ -201,7 +201,7 @@ Implement the two kiosk screens (KioskLogin + KioskTriage) and all supporting ba
     - Test: isOTPLocked returns false when no lock key exists, true when lock sentinel "1" is present
     - _Requirements: 2.4, 3.6, 5.2, 5.6_
 
-  - [~] 7.3 Write E2E integration tests covering all critical paths
+  - [ ] 7.3 Write E2E integration tests covering all critical paths
     - Create `tests/e2e/domain1Auth.e2e.test.js` using Vitest + Supertest against a locally running Express app with Upstash test environment and Supabase staging database
     - Happy path: seed valid account with email — POST /api/auth/otp/request — POST /api/auth/otp/verify with correct OTP — POST /api/auth/qr/generate — GET /api/auth/session/validate returns 200 — DELETE /api/auth/session — GET /api/auth/session/validate returns 401
     - Lockout path: POST /api/auth/otp/verify with wrong OTP 3 times — third response is ERR_OTP_LOCKED — fourth attempt with correct OTP still returns ERR_OTP_LOCKED

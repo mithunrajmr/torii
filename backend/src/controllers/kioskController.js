@@ -130,28 +130,64 @@ export async function handleKioskQuery(req, res) {
 
       faqAnswer = answer;
 
-      // If not confident, upgrade routing downstream to teller escalation
-      if (!confident) {
-        routing.downstream = 'teller_escalation';
-      }
+      if (!confident) routing.downstream = 'teller_escalation';
 
-      // 5. Log every FAQ query for KB gap analysis (fire-and-forget)
       logFaqQuery({
-        accountId,
-        sessionId,
-        queryText: cleanText,
-        domain:       domain       ?? null,
-        wasAnswered:  confident,
-        confidence:   faqConfidence ?? 0,
-        matchedFaqId: matchedFaqId ?? null,
+        accountId, sessionId, queryText: cleanText,
+        domain: domain ?? null, wasAnswered: confident,
+        confidence: faqConfidence ?? 0, matchedFaqId: matchedFaqId ?? null,
       });
 
       emitAuthEvent('FAQ_QUERY_ANSWERED', {
-        question: cleanText,
-        confident,
-        domain,
-        confidence: faqConfidence,
+        question: cleanText, confident, domain, confidence: faqConfidence,
       }, accountId);
+    }
+
+    // 4b. If intent is ACCOUNT_STATUS — query real CBS data for the authenticated customer
+    let accountStatusPayload;
+    if (routing.intent === 'ACCOUNT_STATUS') {
+      try {
+        const [accRows, txRows] = await Promise.all([
+          query`
+            SELECT account_number, full_name, balance, pan_linked
+            FROM accounts WHERE id = ${accountId} LIMIT 1
+          `,
+          query`
+            SELECT amount, error_code, created_at
+            FROM transactions
+            WHERE account_id = ${accountId}
+            ORDER BY created_at DESC
+            LIMIT 5
+          `,
+        ]);
+
+        const acc = accRows[0];
+        if (acc) {
+          const maskedAccNum = String(acc.account_number).slice(-4);
+          const balanceFmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(acc.balance));
+          const recentBlocks = txRows.filter((t) => t.error_code === 'ERR_PAN_MISSING_OVER_50K');
+          const panStatus = acc.pan_linked ? 'linked and verified' : 'not yet linked';
+
+          let voiceSummary = `Your account ending ${maskedAccNum} has a balance of ${balanceFmt}. Your PAN card is ${panStatus}.`;
+
+          if (recentBlocks.length > 0 && !acc.pan_linked) {
+            const blockedAmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(recentBlocks[0].amount));
+            voiceSummary += ` You have ${recentBlocks.length} recent transaction${recentBlocks.length > 1 ? 's' : ''} blocked — the most recent was ${blockedAmt}. Please scan the QR code to upload your PAN card and lift the hold.`;
+            routing.showQR = true;
+          }
+
+          routing.voiceResponse = voiceSummary;
+          accountStatusPayload = {
+            account_number_masked: `****${maskedAccNum}`,
+            balance: Number(acc.balance),
+            pan_linked: acc.pan_linked,
+            blocked_tx_count: recentBlocks.length,
+          };
+        }
+      } catch (err) {
+        console.warn('[kioskController] ACCOUNT_STATUS DB query failed:', err.message);
+        routing.voiceResponse = 'I was unable to retrieve your account details right now. Please speak with a teller.';
+      }
     }
 
     // 6. Build and return the response
@@ -162,7 +198,8 @@ export async function handleKioskQuery(req, res) {
       showQR:          routing.showQR,
       confidence:      routing.confidence,
       detectedLanguage,
-      ...(faqAnswer && { faqAnswer }),
+      ...(faqAnswer          && { faqAnswer }),
+      ...(accountStatusPayload && { accountStatus: accountStatusPayload }),
     };
 
     return res.json(response);
@@ -175,6 +212,97 @@ export async function handleKioskQuery(req, res) {
       intent: 'GENERAL_TRIAGE',
       downstream: 'teller_escalation',
       showQR: false,
+    });
+  }
+}
+
+// ── Public Copilot endpoint (no auth) ────────────────────────────────────────
+// Used by the landing page TORII Copilot widget.
+// Routes using the local keyword fallback when watsonx is unavailable.
+// Returns { response, actionChip? } shaped for the CopilotDrawer component.
+
+// Intent → human readable response + action chip mapping
+const INTENT_RESPONSES = {
+  PAN_MISSING: {
+    response:
+      'It looks like your PAN card needs to be linked. I can help you resolve this in under 60 seconds at our kiosk.',
+    actionChip: { label: '⚡ Launch PAN Triage', route: '/kiosk' },
+  },
+  AML_BLOCKED: {
+    response:
+      'Your account has been flagged for a security review. A teller will assist you — please visit the HITL dashboard.',
+    actionChip: { label: 'Open Teller Dashboard', route: '/teller' },
+  },
+  FAQ_QUERY: {
+    response:
+      'Great question! For the most accurate answer, use the kiosk triage system where our AI can check your account details.',
+    actionChip: { label: 'Go to Kiosk', route: '/kiosk' },
+  },
+  ACCOUNT_STATUS: {
+    response:
+      'I can look up your account status. Head to the kiosk and enter your account number — I\'ll diagnose any issues instantly.',
+    actionChip: { label: 'Check Account at Kiosk', route: '/kiosk' },
+  },
+  GENERAL_TRIAGE: {
+    response:
+      'I\'m here to help! For the fastest resolution, use the self-service kiosk. A teller is also available if needed.',
+    actionChip: { label: 'Start Self-Service', route: '/kiosk' },
+  },
+};
+
+// Keyword-based local fallback — mirrors intentRouter.js localFallbackRoute()
+function detectIntent(text) {
+  const t = text.toLowerCase();
+  if (/pan|kyc|document|upload|link|50.?000|50k|verify identity|blocked.*card|card.*blocked/i.test(t)) {
+    return 'PAN_MISSING';
+  }
+  if (/aml|suspicious|structuring|fraud|flagged/i.test(t)) {
+    return 'AML_BLOCKED';
+  }
+  if (/what|how|when|where|why|interest|rate|fee|charge|limit|loan|fd|fixed deposit|neft|rtgs|upi|atm|ifsc|branch|hours/i.test(t)) {
+    return 'FAQ_QUERY';
+  }
+  if (/status|transaction|transfer|pending|failed|error|problem|issue|stuck/i.test(t)) {
+    return 'ACCOUNT_STATUS';
+  }
+  return 'GENERAL_TRIAGE';
+}
+
+export async function handlePublicCopilotQuery(req, res) {
+  const rawText = req.body?.text || req.body?.query || '';
+
+  if (!rawText.trim()) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+
+  try {
+    // Try watsonx intent router first; fall back to local keyword matching
+    let intent = 'GENERAL_TRIAGE';
+    let voiceResponse = null;
+
+    try {
+      const { processKioskQuery } = await import('../ai/intentRouter.js');
+      const { routing } = await processKioskQuery(rawText, {});
+      intent = routing.intent ?? 'GENERAL_TRIAGE';
+      voiceResponse = routing.voiceResponse ?? null;
+    } catch {
+      // watsonx unavailable — use local fallback
+      intent = detectIntent(rawText);
+    }
+
+    const mapped = INTENT_RESPONSES[intent] ?? INTENT_RESPONSES.GENERAL_TRIAGE;
+
+    return res.json({
+      response: voiceResponse ?? mapped.response,
+      actionChip: mapped.actionChip ?? null,
+      intent,
+    });
+  } catch (err) {
+    console.error('[kioskController] handlePublicCopilotQuery error:', err.message);
+    return res.status(500).json({
+      response: 'I\'m having a moment. Try the kiosk directly for instant help.',
+      actionChip: { label: 'Open Kiosk', route: '/kiosk' },
+      intent: 'GENERAL_TRIAGE',
     });
   }
 }

@@ -3,12 +3,19 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import authRoutes from './routes/authRoutes.js';
 import mobileRoutes from './routes/mobileRoutes.js';
 import tellerRoutes from './routes/tellerRoutes.js';
 import kioskRoutes from './routes/kioskRoutes.js';
+import systemRoutes from './routes/systemRoutes.js';
+import sandboxRoutes, { chaosInterceptor } from './routes/sandboxRoutes.js';
 import { query } from './db/index.js';
 import { set as redisSet, get as redisGet } from './cache/redisClient.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = dirname(__filename);
 
 // Default env fallbacks for local dev if missing
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'torii-secret-key-123456789';
@@ -106,11 +113,24 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// Sandbox-only: mount chaos interceptor on CBS-facing routes before handlers.
+// chaosInterceptor reads Redis key `chaos:rules` and injects latency or errors.
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/auth', chaosInterceptor());
+  app.use('/api/kiosk', chaosInterceptor());
+}
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/mobile', mobileRoutes);
 app.use('/api/teller', tellerRoutes);
 app.use('/api/kiosk', kioskRoutes);
+app.use('/api/system', systemRoutes);
+
+// Sandbox control plane — dev/test only
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/sandbox', sandboxRoutes);
+}
 
 // Global Error Handler
 app.use((err, req, res, next) => {
