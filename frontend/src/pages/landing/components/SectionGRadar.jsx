@@ -25,7 +25,11 @@ export default function SectionGRadar({ refreshKey = 0 }) {
 
       // /api/system/radar returns { failures: [...], activeCount: N }
       // Each failure: { account_number, name, error_code, amount, created_at, diagnosis }
-      const active = Array.isArray(data.failures) ? data.failures : [];
+      const active = Array.isArray(data.failures)
+        ? data.failures
+        : Array.isArray(data.activeFailures)
+        ? data.activeFailures
+        : [];
 
       setFailures(active);
       setLastChecked(new Date());

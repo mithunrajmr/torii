@@ -6,6 +6,7 @@ import KioskTriage from '../../frontend/src/pages/kiosk/KioskTriage.jsx';
 
 describe('KioskTriage Component', () => {
   it('renders triage view with active session header and FAQ input', () => {
+    localStorage.setItem('kiosk_jwt', 'mock-jwt-token');
     sessionStorage.setItem('kiosk_jwt', 'mock-jwt-token');
     render(
       <BrowserRouter>

@@ -1,28 +1,36 @@
-// frontend/src/pages/landing/copilot/CopilotDrawer.jsx
-// Extruded neumorphic chat drawer with inset message stream well.
-// Wired to POST /api/kiosk/voice — if response includes actionChip, renders ActionChip.
-
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X } from 'lucide-react';
+import { Send, X, ShieldCheck, UserCheck, Lock, AlertTriangle, Zap, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ActionChip from './ActionChip.jsx';
 
-// Map backend route suggestions to ActionChip config
-const ROUTE_ICONS = {}; // Kept intentionally lean — chips just show label + arrow
-
 export default function CopilotDrawer({ onClose }) {
+  const navigate = useNavigate();
+  const [jwt, setJwt] = useState(() => localStorage.getItem('kiosk_jwt'));
+  const [accountInfo, setAccountInfo] = useState(null);
+
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Hi! I\'m TORII Copilot. Describe any banking issue and I\'ll route you to the right solution instantly.',
-      chip: null,
+      text: jwt
+        ? 'Welcome back! I am TORII Copilot (Authenticated Mode). I have live access to your account ledger and can diagnose and solve your transaction holds in seconds.'
+        : 'Hi! I\'m TORII Copilot (Public Guest Mode). Ask me any general banking question (FD rates, card blocking, branch timings), or log in to solve account issues instantly.',
+      chip: jwt ? { label: '⚡ Run Proactive Radar', route: '/kiosk/triage' } : { label: '🔑 Log In to Account', route: '/kiosk/login' },
+      authenticated: Boolean(jwt),
     },
   ]);
+
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
 
-  // Auto-scroll to latest message (scrollIntoView may be absent in jsdom)
+  // Check auth state on load
+  useEffect(() => {
+    const currentToken = localStorage.getItem('kiosk_jwt');
+    setJwt(currentToken);
+  }, []);
+
+  // Auto-scroll to latest message
   useEffect(() => {
     if (typeof bottomRef.current?.scrollIntoView === 'function') {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -39,22 +47,36 @@ export default function CopilotDrawer({ onClose }) {
     setSending(true);
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (jwt) {
+        headers['Authorization'] = `Bearer ${jwt}`;
+        headers['x-kiosk-jwt'] = jwt;
+      }
+
       const res = await fetch('/api/kiosk/voice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ text }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      // Shape: { response: string, actionChip?: { label: string, route: string } }
+      if (data.authenticated && data.accountContext) {
+        setAccountInfo(data.accountContext);
+      }
+
       const chip = data.actionChip ?? null;
+      const secondary = data.secondaryActions ?? [];
+
       const reply = {
         id: `a-${Date.now()}`,
         role: 'assistant',
         text: data.response ?? data.text ?? 'I\'ll help you with that.',
         chip,
+        secondary,
+        accountContext: data.accountContext ?? null,
+        authenticated: data.authenticated ?? Boolean(jwt),
       };
       setMessages((prev) => [...prev, reply]);
     } catch {
@@ -87,45 +109,97 @@ export default function CopilotDrawer({ onClose }) {
       data-testid="copilot-drawer"
     >
       {/* ── Drawer Header ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-slate-300/40 pb-3">
         <div className="flex items-center gap-2">
           <div className="relative">
             <div
-              className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center
-                         shadow-[0_4px_10px_rgba(37,99,235,0.4)]"
+              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md ${
+                jwt ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
+              }`}
               aria-hidden="true"
             >
-              <span className="text-white font-extrabold text-xs">T</span>
+              <span className="font-extrabold text-xs">T</span>
             </div>
-            {/* Pulsing active beacon */}
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400
-                             ring-2 ring-[#e8ecf2]" aria-hidden="true" />
+            <span
+              className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#e8ecf2] ${
+                jwt ? 'bg-emerald-400 animate-ping' : 'bg-blue-400'
+              }`}
+              aria-hidden="true"
+            />
           </div>
           <div>
-            <p className="text-xs font-extrabold text-slate-800">TORII Copilot</p>
-            <p className="text-[9px] text-emerald-600 font-semibold">watsonx Connected</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-extrabold text-slate-800">TORII Copilot</p>
+              {jwt ? (
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
+                  AUTH
+                </span>
+              ) : (
+                <span className="text-[9px] bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded">
+                  GUEST
+                </span>
+              )}
+            </div>
+            <p className="text-[9px] text-slate-500 font-medium">
+              {jwt
+                ? accountInfo ? `Account: ${accountInfo.maskedNumber}` : 'Account Verified'
+                : 'General Q&A Mode'}
+            </p>
           </div>
         </div>
 
-        <button
-          onClick={onClose}
-          aria-label="Close Copilot"
-          className="w-7 h-7 rounded-xl bg-[#e8ecf2] flex items-center justify-center
-                     shadow-[3px_3px_6px_#cbced1,-3px_-3px_6px_#ffffff]
-                     hover:shadow-[4px_4px_8px_#cbced1,-4px_-4px_8px_#ffffff]
-                     active:shadow-[inset_2px_2px_4px_#cbced1,inset_-2px_-2px_4px_#ffffff]
-                     transition-all duration-150 focus-visible:outline-none focus-visible:ring-2
-                     focus-visible:ring-blue-600"
-        >
-          <X className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {jwt ? (
+            <button
+              onClick={() => {
+                localStorage.removeItem('kiosk_jwt');
+                setJwt(null);
+                setAccountInfo(null);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `logout-${Date.now()}`,
+                    role: 'assistant',
+                    text: 'Switched to Public Guest Mode. Log in anytime to access proactive account diagnostics.',
+                    chip: { label: '🔑 Log In to Account', route: '/kiosk/login' },
+                  },
+                ]);
+              }}
+              className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-lg border border-red-200"
+            >
+              Logout
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                onClose();
+                navigate('/kiosk/login');
+              }}
+              className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg border border-blue-200"
+            >
+              Log In
+            </button>
+          )}
+
+          <button
+            onClick={onClose}
+            aria-label="Close Copilot"
+            className="w-7 h-7 rounded-xl bg-[#e8ecf2] flex items-center justify-center
+                       shadow-[3px_3px_6px_#cbced1,-3px_-3px_6px_#ffffff]
+                       hover:shadow-[4px_4px_8px_#cbced1,-4px_-4px_8px_#ffffff]
+                       active:shadow-[inset_2px_2px_4px_#cbced1,inset_-2px_-2px_4px_#ffffff]
+                       transition-all duration-150"
+          >
+            <X className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       {/* ── Message Stream (inset well) ─────────────────────────────────── */}
       <div
         className="flex-1 bg-[#e8ecf2] rounded-2xl p-3
                    shadow-[inset_4px_4px_8px_#cbced1,inset_-4px_-4px_8px_#ffffff]
-                   overflow-y-auto max-h-72 flex flex-col gap-3"
+                   overflow-y-auto max-h-80 flex flex-col gap-3"
         aria-live="polite"
         aria-label="Message history"
         data-testid="message-stream"
@@ -137,18 +211,43 @@ export default function CopilotDrawer({ onClose }) {
           >
             <div
               className={[
-                'max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed',
+                'max-w-[90%] px-3 py-2 rounded-2xl text-xs leading-relaxed',
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white rounded-br-sm shadow-[2px_2px_6px_rgba(37,99,235,0.3)]'
                   : 'bg-[#e8ecf2] text-slate-700 rounded-bl-sm shadow-[3px_3px_6px_#cbced1,-3px_-3px_6px_#ffffff]',
               ].join(' ')}
             >
               {msg.text}
+
+              {/* Agentic Pre-Resolution Radar Card inside message bubble if present */}
+              {msg.accountContext && (
+                <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-300 text-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-amber-900 border-b border-amber-200 pb-1.5">
+                    <span className="flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      Section G — Bottleneck Radar
+                    </span>
+                    <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded text-[10px]">
+                      {msg.accountContext.blockedTxCount} Active Failure(s)
+                    </span>
+                  </div>
+                  <div className="text-[11px] space-y-1 font-mono text-slate-700">
+                    <p>Account: <strong className="text-slate-900">{msg.accountContext.maskedNumber} ({msg.accountContext.fullName})</strong></p>
+                    <p>Error: <span className="text-red-600 bg-red-100 px-1 rounded font-bold">{msg.accountContext.errorCode}</span></p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Action Chip — rendered below assistant message if present */}
-            {msg.role === 'assistant' && msg.chip && (
-              <ActionChip label={msg.chip.label} route={msg.chip.route} />
+            {/* Action Chips */}
+            {msg.role === 'assistant' && (
+              <div className="flex flex-wrap gap-2 mt-1 max-w-[90%]">
+                {msg.chip && <ActionChip label={msg.chip.label} route={msg.chip.route} />}
+                {msg.secondary &&
+                  msg.secondary.map((sec, idx) => (
+                    <ActionChip key={idx} label={sec.label} route={sec.route} />
+                  ))}
+              </div>
             )}
           </div>
         ))}
@@ -181,7 +280,7 @@ export default function CopilotDrawer({ onClose }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe your banking issue…"
+          placeholder={jwt ? 'Ask anything or say "Fix my account"…' : 'Ask general banking questions…'}
           disabled={sending}
           data-testid="copilot-input"
           aria-label="Type your banking question"
@@ -207,3 +306,4 @@ export default function CopilotDrawer({ onClose }) {
     </div>
   );
 }
+

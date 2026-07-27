@@ -420,6 +420,37 @@ export async function query(strings, ...values) {
     return [{ inserted: true }];
   }
 
+  // agent_performance_log — INSERT and UPDATE both no-op in mock
+  if (rawSql.includes('INSERT INTO agent_performance_log')) {
+    return [{ inserted: true }];
+  }
+  if (rawSql.includes('UPDATE agent_performance_log')) {
+    return [{ updated: true }];
+  }
+
+  // agent_config — return empty rows so configService uses built-in defaults
+  if (rawSql.includes('FROM agent_config')) {
+    return [];
+  }
+
+  // system radar — transactions JOIN accounts for recent failures (systemController)
+  if (rawSql.includes('FROM transactions t') && rawSql.includes('JOIN accounts a')) {
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const results = [];
+    for (const tx of mockDatabase.transactions) {
+      if (!tx.error_code) continue;
+      if (new Date(tx.created_at) < cutoff24h) continue;
+      const acc = mockDatabase.accounts.find((a) => a.id === tx.account_id && !a.pan_linked);
+      if (!acc) continue;
+      results.push({
+        tx_id: tx.id, amount: tx.amount, error_code: tx.error_code,
+        created_at: tx.created_at, account_number: acc.account_number,
+        full_name: acc.full_name, pan_linked: acc.pan_linked,
+      });
+    }
+    return results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+  }
+
   // ── Sandbox seeding & reset ─────────────────────────────────────────────
 
   // SELECT id FROM accounts WHERE account_number (sandbox seed lookup)

@@ -161,6 +161,95 @@ if (process.env.NODE_ENV !== 'production') {
       note: 'Add as Authorization: Bearer <token> header. Valid for 8 hours. Dev mode only.',
     });
   });
+
+  // ── Dev-only: single-call kiosk bypass ───────────────────────────────────
+  // GET /api/dev/kiosk-bypass?account_number=1000000001
+  // Requests OTP, reads it from Redis in-process, verifies it, returns JWT.
+  // All in one request — no async race conditions.
+  app.get('/api/dev/kiosk-bypass', async (req, res) => {
+    try {
+      const account_number = req.query.account_number || '1000000001';
+
+      // 1. Look up account
+      const accounts = await query`
+        SELECT id, email FROM accounts WHERE account_number = ${account_number} LIMIT 1
+      `;
+      if (!accounts.length) return res.status(404).json({ error: 'account not found' });
+      const account = accounts[0];
+
+      // 2. Generate and store OTP directly (bypass email)
+      const crypto = await import('crypto');
+      const otp = String(crypto.default.randomInt(100000, 999999));
+      await redisSet(`otp:${account.id}`, otp, { ex: 300 });
+
+      // 3. Import auth controller logic inline — verify OTP and issue JWT
+      const jwt = await import('jsonwebtoken');
+      const { v4: uuidv4 } = await import('uuid');
+      const { createKioskSession } = await import('./cache/sessionManager.js');
+
+      // Consume OTP
+      await redisSet(`otp:${account.id}`, '', { ex: 1 });
+
+      // Fetch failed tx summary
+      const txRows = await query`
+        SELECT amount, created_at FROM transactions
+        WHERE account_id = ${account.id}
+          AND error_code = 'ERR_PAN_MISSING_OVER_50K'
+          AND created_at >= NOW() - INTERVAL '24 hours'
+        ORDER BY created_at DESC
+      `;
+      const failed_tx_summary = txRows.length ? {
+        count: txRows.length,
+        most_recent_amount: Number(txRows[0].amount),
+        most_recent_created_at: txRows[0].created_at,
+      } : null;
+
+      // Issue JWT
+      const jti = uuidv4();
+      const now = Math.floor(Date.now() / 1000);
+      const token = jwt.default.sign(
+        {
+          sub: account.id,
+          account_number: String(account_number).slice(-4),
+          role: 'CUSTOMER',
+          jti,
+          iat: now,
+          exp: now + 2100,
+        },
+        process.env.JWT_SECRET || 'torii-secret-key-123456789'
+      );
+
+      // Create Redis session
+      await createKioskSession(account.id, jti);
+
+      res.json({
+        jwt: token,
+        failed_tx_summary,
+        account_number,
+        note: 'Dev bypass — single call, no email. Never use in production.',
+      });
+    } catch (err) {
+      console.error('[dev/kiosk-bypass]', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Dev-only: peek at the current OTP (legacy, kept for curl testing) ────
+  app.get('/api/dev/peek-otp', async (req, res) => {
+    try {
+      const { account_number } = req.query;
+      if (!account_number) return res.status(400).json({ error: 'account_number required' });
+      const accounts = await query`
+        SELECT id FROM accounts WHERE account_number = ${account_number} LIMIT 1
+      `;
+      if (!accounts.length) return res.status(404).json({ error: 'account not found' });
+      const otp = await redisGet(`otp:${accounts[0].id}`);
+      if (!otp) return res.status(404).json({ error: 'no active OTP' });
+      res.json({ otp: String(otp), account_number });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 if (process.env.NODE_ENV !== 'test') {

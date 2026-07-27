@@ -136,6 +136,18 @@ export async function routeIntent(cleanText, accountContext = {}) {
 function localFallbackRoute(text, accountContext) {
   const t = text.toLowerCase();
 
+  // Greeting / Conversational check -> route to FAQ agent for a friendly welcome
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i.test(t.trim())) {
+    return {
+      intent: 'FAQ_QUERY',
+      downstream: 'faq_agent',
+      confidence: 0.9,
+      voiceResponse: 'Hello! Welcome to TORII Autonomous Branch. How can I help you today?',
+      showQR: false,
+      contextOverride: false,
+    };
+  }
+
   // PAN missing — also honour the account context flag
   if (
     accountContext.has_failed_pan_tx ||

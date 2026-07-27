@@ -18,6 +18,7 @@ const FAQ_AGENT_ID = process.env.WXO_FAQ_AGENT_ID || 'torii_faq_agent';
 
 // ─── Static local FAQ KB (fallback when WXO agent is unavailable) ─────────────
 const LOCAL_FAQ = [
+  { q: /^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i, a: 'Hello! I am TORII Copilot. I can answer questions about FD interest rates, branch timings, KYC requirements, or help you log in to resolve account holds in seconds. What can I help you with today?' },
   { q: /interest rate|fd rate|fixed deposit rate/i,       a: 'Our current FD interest rates range from 5.5% to 7.25% p.a. depending on the tenure. Please visit the branch or our website for the latest rates.' },
   { q: /savings account interest/i,                       a: 'We offer 3.5% p.a. interest on savings accounts, credited quarterly.' },
   { q: /minimum balance|average monthly balance/i,        a: 'The minimum average monthly balance for savings accounts is ₹5,000. Non-maintenance charges of ₹150 apply.' },

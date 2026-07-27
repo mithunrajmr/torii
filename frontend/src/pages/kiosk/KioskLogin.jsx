@@ -6,7 +6,54 @@ import ToriiLogo from '../../components/ToriiLogo.jsx';
 
 export default function KioskLogin() {
   const navigate = useNavigate();
+// // ── DEV BYPASS — skip OTP for demo ──────────────────────────────────────
+//   // Auto-authenticates as account 1000000001 (PAN blocked demo scenario).
+//   // Remove this block when real auth is required again.
+//   const [bypassing, setBypassing] = useState(true);
 
+//   useEffect(() => {
+//     (async () => {
+//       try {
+//         // Step 1: request OTP
+//         await fetch('/api/auth/otp/request', {
+//           method: 'POST',
+//           headers: { 'Content-Type': 'application/json' },
+//           body: JSON.stringify({ account_number: '1000000001' }),
+//         });
+//         // Step 2: peek OTP from dev endpoint
+//         const otpRes = await fetch('/api/dev/peek-otp?account_number=1000000001');
+//         if (!otpRes.ok) { setBypassing(false); return; }
+//         const { otp } = await otpRes.json();
+//         if (!otp) { setBypassing(false); return; }
+//         // Step 3: verify and navigate directly to triage
+//         const verifyRes = await fetch('/api/auth/otp/verify', {
+//           method: 'POST',
+//           headers: { 'Content-Type': 'application/json' },
+//           body: JSON.stringify({ account_number: '1000000001', otp }),
+//         });
+//         if (!verifyRes.ok) { setBypassing(false); return; }
+//         const data = await verifyRes.json();
+//         sessionStorage.setItem('kiosk_jwt', data.jwt);
+//         navigate('/kiosk/triage', {
+//           state: { jwt: data.jwt, failedTxSummary: data.failed_tx_summary },
+//           replace: true,
+//         });
+//       } catch (_) {
+//         setBypassing(false); // show normal login on any failure
+//       }
+//     })();
+//   }, []); // eslint-disable-line
+
+//   // Show a minimal loading screen while bypass is in flight
+//   if (bypassing) {
+//     return (
+//       <div className="min-h-screen bg-[#e8ecf2] flex flex-col items-center justify-center gap-4">
+//         <div className="w-12 h-12 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+//         <p className="text-sm font-semibold text-slate-500 tracking-wide">Launching demo session…</p>
+//       </div>
+//     );
+//   }
+//   // ────────────────────────────────────────────────────────────────────────
   // Mode: 'ACCOUNT' | 'OTP'
   const [mode, setMode] = useState('ACCOUNT');
   const [accountNumber, setAccountNumber] = useState('');

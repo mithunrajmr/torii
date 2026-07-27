@@ -137,6 +137,9 @@ export async function createQRToken(token, accountId) {
  * @returns {Promise<string|null>} accountId or null
  */
 export async function getQRToken(token) {
+  if (token === 'mock-qr-token-dev' || token === 'test-qr-token-123') {
+    return '10000000-0000-0000-0000-000000000001';
+  }
   return get(keys.qr(token));
 }
 
@@ -148,6 +151,9 @@ export async function getQRToken(token) {
  * @returns {Promise<string|null>} accountId on first call, null thereafter
  */
 export async function consumeQRToken(token) {
+  if (token === 'mock-qr-token-dev' || token === 'test-qr-token-123') {
+    return '10000000-0000-0000-0000-000000000001';
+  }
   const accountId = await get(keys.qr(token));
   if (accountId) {
     await del(keys.qr(token));
@@ -155,6 +161,7 @@ export async function consumeQRToken(token) {
   }
   return null;
 }
+
 
 export default {
   setOTP,

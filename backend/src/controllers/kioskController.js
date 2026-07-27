@@ -223,6 +223,15 @@ export async function handleKioskQuery(req, res) {
 
 // Intent → human readable response + action chip mapping
 const INTENT_RESPONSES = {
+  GREETING: {
+    response:
+      'Hello! Welcome to TORII Autonomous Branch. I can answer questions about FD interest rates, branch timings, KYC rules, or help you log in to solve account issues in seconds.',
+    actionChip: { label: '📈 Check FD Rates', route: '/kiosk' },
+    secondaryActions: [
+      { label: '🔑 Log In to Account', route: '/kiosk/login' },
+      { label: '🕒 Branch Timings', route: '/kiosk' }
+    ]
+  },
   PAN_MISSING: {
     response:
       'It looks like your PAN card needs to be linked. I can help you resolve this in under 60 seconds at our kiosk.',
@@ -252,7 +261,10 @@ const INTENT_RESPONSES = {
 
 // Keyword-based local fallback — mirrors intentRouter.js localFallbackRoute()
 function detectIntent(text) {
-  const t = text.toLowerCase();
+  const t = text.trim().toLowerCase();
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i.test(t)) {
+    return 'GREETING';
+  }
   if (/pan|kyc|document|upload|link|50.?000|50k|verify identity|blocked.*card|card.*blocked/i.test(t)) {
     return 'PAN_MISSING';
   }
@@ -275,8 +287,78 @@ export async function handlePublicCopilotQuery(req, res) {
     return res.status(400).json({ error: 'text is required' });
   }
 
+  // 1. Check for Authorization header or x-kiosk-jwt
+  const authHeader = req.headers.authorization || req.headers['x-kiosk-jwt'];
+  let authenticatedAccount = null;
+
+  if (authHeader) {
+    try {
+      const token = authHeader.replace(/^Bearer\s+/i, '');
+      const jwtSecret = process.env.JWT_SECRET || 'dev-secret-key-torii-2024';
+      const jwtMod = await import('jsonwebtoken');
+      const jwt = jwtMod.default || jwtMod;
+      const decoded = jwt.verify(token, jwtSecret);
+      if (decoded && decoded.sub) {
+        // Query account details from PostgreSQL
+        const [accRows, txRows] = await Promise.all([
+          query`SELECT id, account_number, full_name, balance, pan_linked FROM accounts WHERE id = ${decoded.sub} LIMIT 1`,
+          query`SELECT amount, error_code, created_at FROM transactions WHERE account_id = ${decoded.sub} AND error_code IS NOT NULL ORDER BY created_at DESC LIMIT 5`,
+        ]);
+        if (accRows.length > 0) {
+          const acc = accRows[0];
+          const recentBlocks = txRows.filter((t) => t.error_code === 'ERR_PAN_MISSING_OVER_50K');
+          authenticatedAccount = {
+            id: acc.id,
+            accountNumber: acc.account_number,
+            maskedNumber: `****${String(acc.account_number).slice(-4)}`,
+            fullName: acc.full_name,
+            balance: Number(acc.balance),
+            panLinked: acc.pan_linked,
+            blockedTxCount: recentBlocks.length,
+            mostRecentAmount: recentBlocks[0]?.amount ? Number(recentBlocks[0].amount) : null,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[kioskController] Optional auth check failed in Copilot:', err.message);
+    }
+  }
+
   try {
-    // Try watsonx intent router first; fall back to local keyword matching
+    // 2. If authenticated customer, run Context-Aware Agentic Account Solver
+    if (authenticatedAccount) {
+      const { maskedNumber, fullName, panLinked, blockedTxCount, mostRecentAmount } = authenticatedAccount;
+      const isAccountQuery = /fix|resolve|issue|problem|block|error|pan|hold|status|transaction|deposit|failed|50k|50.?000/i.test(rawText);
+
+      if (!panLinked || blockedTxCount > 0 || isAccountQuery) {
+        const amtStr = mostRecentAmount ? `₹${mostRecentAmount.toLocaleString('en-IN')}` : '₹50,000+';
+        const agenticText = !panLinked || blockedTxCount > 0
+          ? `Welcome ${fullName}! I have diagnosed your account (${maskedNumber}). Proactive Radar detected ${blockedTxCount || 1} active failure(s): transaction of ${amtStr} is blocked due to unlinked PAN (ERR_PAN_MISSING_OVER_50K). You can resolve this immediately in seconds.`
+          : `Hello ${fullName}! Your account (${maskedNumber}) is in good standing. Balance is ₹${authenticatedAccount.balance.toLocaleString('en-IN')}. How can I assist your banking session today?`;
+
+        return res.json({
+          authenticated: true,
+          accountContext: {
+            maskedNumber,
+            fullName,
+            panLinked,
+            blockedTxCount: blockedTxCount || 1,
+            errorCode: 'ERR_PAN_MISSING_OVER_50K',
+          },
+          response: agenticText,
+          actionChip: !panLinked || blockedTxCount > 0
+            ? { label: '⚡ Execute Agentic Fix Now', route: '/kiosk/triage?action=fix_pan' }
+            : { label: 'Go to Kiosk Triage', route: '/kiosk/triage' },
+          secondaryActions: [
+            { label: '👨‍💼 Speak to Teller', route: '/teller' },
+            { label: '📄 Account Overview', route: '/kiosk/triage' }
+          ],
+          intent: 'ACCOUNT_STATUS',
+        });
+      }
+    }
+
+    // 3. Unauthenticated / Public Mode — General FAQ Answers
     let intent = 'GENERAL_TRIAGE';
     let voiceResponse = null;
 
@@ -286,23 +368,43 @@ export async function handlePublicCopilotQuery(req, res) {
       intent = routing.intent ?? 'GENERAL_TRIAGE';
       voiceResponse = routing.voiceResponse ?? null;
     } catch {
-      // watsonx unavailable — use local fallback
       intent = detectIntent(rawText);
+    }
+
+    // Check FAQ RAG agent for general queries
+    let faqResponseText = voiceResponse;
+    try {
+      const { askFaqAgent } = await import('../ai/faqAgent.js');
+      const faqResult = await askFaqAgent(rawText);
+      if (faqResult && faqResult.confident && faqResult.answer) {
+        faqResponseText = faqResult.answer;
+      }
+    } catch (faqErr) {
+      console.warn('[kioskController] FAQ RAG fallback error:', faqErr.message);
     }
 
     const mapped = INTENT_RESPONSES[intent] ?? INTENT_RESPONSES.GENERAL_TRIAGE;
 
     return res.json({
-      response: voiceResponse ?? mapped.response,
-      actionChip: mapped.actionChip ?? null,
+      authenticated: false,
+      response: faqResponseText ?? mapped.response,
+      actionChip: mapped.actionChip ?? (authenticatedAccount
+        ? { label: 'Go to Kiosk Triage', route: '/kiosk/triage' }
+        : { label: '🔑 Log In to Solve Account Issues', route: '/kiosk/login' }),
+      secondaryActions: mapped.secondaryActions ?? [],
       intent,
     });
   } catch (err) {
     console.error('[kioskController] handlePublicCopilotQuery error:', err.message);
-    return res.status(500).json({
-      response: 'I\'m having a moment. Try the kiosk directly for instant help.',
-      actionChip: { label: 'Open Kiosk', route: '/kiosk' },
-      intent: 'GENERAL_TRIAGE',
+    const fallbackIntent = detectIntent(rawText);
+    const mapped = INTENT_RESPONSES[fallbackIntent] || INTENT_RESPONSES.GENERAL_TRIAGE;
+    return res.json({
+      authenticated: false,
+      response: mapped.response,
+      actionChip: mapped.actionChip || { label: 'Open Kiosk', route: '/kiosk' },
+      secondaryActions: mapped.secondaryActions || [],
+      intent: fallbackIntent,
     });
   }
 }
+

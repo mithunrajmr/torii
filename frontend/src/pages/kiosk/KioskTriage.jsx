@@ -29,6 +29,8 @@ import {
   ShieldAlert,
   Copy,
   Check,
+  Clock,
+  Zap,
 } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
 import QRCodeGenerator from '../../components/QRCodeGenerator.jsx';
@@ -53,8 +55,50 @@ export default function KioskTriage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const accountStatus   = location.state?.accountStatus || null;
-  const failedTxSummary = location.state?.failedTxSummary || null;
+  // ── DEV BYPASS ─────────────────────────────────────────────────────────────
+  // State-based JWT so setting it triggers a re-render without any navigate call.
+  const [jwt, setJwt] = useState(
+    () => location.state?.jwt || sessionStorage.getItem('kiosk_jwt') || null
+  );
+  const [failedTxSummary, setFailedTxSummary] = useState(
+    () => location.state?.failedTxSummary || null
+  );
+  const accountStatus = location.state?.accountStatus || null;
+
+  // If no JWT present, auto-authenticate in dev mode
+  const [devBooting, setDevBooting] = useState(!jwt);
+
+  useEffect(() => {
+    if (jwt) { setDevBooting(false); return; }
+    (async () => {
+      try {
+        // Single backend call — no OTP email, no race condition
+        const res = await fetch('/api/dev/kiosk-bypass?account_number=1000000001');
+        if (!res.ok) { setDevBooting(false); return; }
+        const data = await res.json();
+        sessionStorage.setItem('kiosk_jwt', data.jwt);
+        setFailedTxSummary(data.failed_tx_summary || null);
+        setJwt(data.jwt);
+      } catch (_) {
+        setDevBooting(false);
+      }
+    })();
+  }, []); // eslint-disable-line
+
+  // Once we have a jwt, stop showing the loading screen
+  useEffect(() => {
+    if (jwt) setDevBooting(false);
+  }, [jwt]);
+
+  if (devBooting) {
+    return (
+      <div className="min-h-screen bg-[#e8ecf2] flex flex-col items-center justify-center gap-4">
+        <div className="w-12 h-12 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+        <p className="text-sm font-semibold text-slate-500 tracking-wide">Launching TORII demo session…</p>
+      </div>
+    );
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [inputText,        setInputText]        = useState('');
@@ -69,6 +113,14 @@ export default function KioskTriage() {
   const [promptDismissed,  setPromptDismissed]  = useState(false);
   const [isListening,      setIsListening]      = useState(false);  // mic active
   const [micSupported,     setMicSupported]     = useState(false);  // browser support flag
+  const [currentTime,      setCurrentTime]      = useState(() => new Date().toLocaleTimeString('en-GB'));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleTimeString('en-GB'));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const inputRef         = useRef(null);
   const recognitionRef   = useRef(null);
@@ -96,10 +148,10 @@ export default function KioskTriage() {
     };
   }, [jwt, resetInactivityTimer]);
 
-  // ── Auth guard ─────────────────────────────────────────────────────────────
+  // ── Auth guard — only redirect if not booting and still no jwt ───────────
   useEffect(() => {
-    if (!jwt) navigate('/kiosk/login', { replace: true });
-  }, [jwt, navigate]);
+    if (!devBooting && !jwt) navigate('/kiosk/login', { replace: true });
+  }, [jwt, devBooting, navigate]);
 
 
   // ── Session heartbeat — refreshes Redis TTL so active sessions stay alive ──
@@ -164,6 +216,7 @@ export default function KioskTriage() {
       }
     } catch (_) { /* ignore */ } finally {
       sessionStorage.removeItem('kiosk_jwt');
+      setJwt(null);
       navigate('/kiosk/login', { replace: true });
     }
   };
@@ -285,41 +338,80 @@ export default function KioskTriage() {
           </div>
         </div>
 
-        {/* ── PAN Compliance Check & Interactive User Prompt ──────────────── */}
+        {/* ── Section G — Proactive Interception Radar ────────────────────────── */}
         {(!accountStatus?.pan_linked || failedTxSummary) && !showQR && !promptDismissed && (
-          <div className="neo-card p-5 border-l-4 border-blue-500 bg-blue-50/75 transition-all">
-            <div className="flex items-start gap-3">
-              <ShieldAlert className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-extrabold text-slate-800">
-                  {failedTxSummary ? 'Compliance Hold: PAN Verification Required' : 'PAN Card Linking Recommended'}
-                </p>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  {failedTxSummary
-                    ? `Your transaction of ₹${failedTxSummary.most_recent_amount?.toLocaleString('en-IN')} requires a verified PAN card. Would you like to generate a QR code to link your PAN card now?`
-                    : `Welcome ${accountStatus?.full_name || ''}! Database verification indicates your account is not currently linked to a verified PAN card. Would you like to generate a QR code and link your account now?`}
-                </p>
-
-                <div className="flex items-center gap-3 mt-4">
-                  <button
-                    onClick={fetchQRCode}
-                    disabled={qrLoading}
-                    className="neo-button px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>{qrLoading ? 'Generating QR…' : '⚡ Yes, Link PAN Card'}</span>
-                  </button>
-                  <button
-                    onClick={() => setPromptDismissed(true)}
-                    className="neo-button px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl cursor-pointer"
-                  >
-                    Not Now
-                  </button>
-                </div>
+          <div className="neo-card p-6 border-l-4 border-amber-500 bg-amber-50/80 space-y-4 shadow-md transition-all">
+            {/* Header & Live Time Badge */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200/60 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                </span>
+                <h3 className="text-xs font-black uppercase tracking-wider text-amber-900">
+                  Section G — Proactive Interception Radar
+                </h3>
               </div>
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-800 bg-amber-100/90 px-2.5 py-1 rounded-full border border-amber-300/50">
+                <Clock className="w-3.5 h-3.5 text-amber-700" />
+                <span>{currentTime}</span>
+              </div>
+            </div>
+
+            {/* Subheader Alert Title */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-amber-950">
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Actionable Bottleneck Detected — Pre-Resolution Ready</span>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-900 font-extrabold text-[11px]">
+                {failedTxSummary?.count || 2} Active Failures Intercepted
+              </span>
+            </div>
+
+            {/* Intercepted Failure Bento Box */}
+            <div className="neo-inset p-4 rounded-xl bg-white/90 space-y-2 text-xs text-slate-700 border border-amber-200">
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-slate-500">Account:</span>
+                <span className="font-mono font-bold text-slate-800">
+                  ****{accountStatus?.account_number?.slice(-4) || '0001'} ({accountStatus?.full_name?.toUpperCase() || 'ARJUN S.'})
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="font-semibold text-slate-500">Error:</span>
+                <span className="font-mono font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                  ERR_PAN_MISSING_OVER_50K
+                </span>
+              </div>
+              <div className="py-1 text-slate-600 leading-snug">
+                PAN card not linked — transactions over ₹50,000 are blocked until PAN is verified.
+              </div>
+              <div className="pt-1.5 border-t border-slate-200 text-[11px] font-semibold text-amber-700 flex items-center justify-between">
+                <span>+1 more failure in queue</span>
+                <span className="text-slate-400 font-mono">CBS Ledger Intercepted</span>
+              </div>
+            </div>
+
+            {/* Call-to-Action Execution Button */}
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={fetchQRCode}
+                disabled={qrLoading}
+                className="w-full py-3 px-5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-600/25 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Zap className="w-4 h-4 text-amber-200 animate-bounce" />
+                <span>{qrLoading ? 'Initializing Agentic Pipeline…' : 'Execute Agentic Fix Now'}</span>
+              </button>
+              <button
+                onClick={() => setPromptDismissed(true)}
+                className="px-3 py-3 text-xs font-bold text-slate-500 hover:text-slate-700 rounded-xl hover:bg-slate-200/50 cursor-pointer"
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         )}
+
 
         {/* ── QR Code Panel (on-demand) ────────────────────────────────────── */}
         {showQR && (

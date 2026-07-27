@@ -66,6 +66,34 @@ node backend/scripts/verify-infra.js
 
 The script loads `.env` automatically and exits with code `1` if any service is in a `FAILING` state. Use this before deploying or after changing credentials to confirm every integration is live.
 
+### Single-call Kiosk Bypass (non-production only)
+
+When `NODE_ENV` is not `production`, a single endpoint handles the full kiosk auth flow (account lookup → OTP generation → OTP verification → JWT issuance) without sending an email. Useful for demos and automated testing:
+
+```bash
+curl "http://localhost:5000/api/dev/kiosk-bypass?account_number=1000000001"
+```
+
+Response:
+```json
+{
+  "jwt": "<signed CUSTOMER JWT>",
+  "failed_tx_summary": { "count": 1, "most_recent_amount": 75000, "most_recent_created_at": "..." },
+  "account_number": "1000000001",
+  "note": "Dev bypass — single call, no email. Never use in production."
+}
+```
+
+Use the returned `jwt` as `Authorization: Bearer <jwt>` on any `/api/auth/*` or `/api/kiosk/*` endpoint. **This endpoint is disabled in production.**
+
+### Peek OTP (non-production only, legacy)
+
+A legacy helper to read the current OTP stored in Redis for a given account (useful for curl-based testing after manually calling `/api/auth/otp/request`):
+
+```bash
+curl "http://localhost:5000/api/dev/peek-otp?account_number=1000000001"
+```
+
 ### Generate a Teller JWT (non-production only)
 
 When `NODE_ENV` is not `production`, a helper endpoint is available for testing the teller dashboard without going through the full kiosk auth flow:
