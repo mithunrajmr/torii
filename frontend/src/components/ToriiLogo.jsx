@@ -1,66 +1,78 @@
 // frontend/src/components/ToriiLogo.jsx
 import React from 'react';
+import ToriiMiniLogo from './ToriiMiniLogo.jsx';
+import ToriiWordmark from './ToriiWordmark.jsx';
 
 /**
- * Torii Brand Logo Component
+ * Torii Brand Logo Component (Vector Upgrade)
  * 
  * Supports variants:
- *  - 'full': Displays image logo with brand name & tagline
- *  - 'horizontal': Compact header layout with image logo + brand text
- *  - 'icon': Icon mark only
+ *  - 'full': Centered icon logo mark + Torii Wordmark + optional tagline
+ *  - 'horizontal': Compact layout with icon mark + Torii Wordmark
+ *  - 'icon': Icon mark (Torii Gate) only
  */
-export default function ToriiLogo({ variant = 'horizontal', className = '', showTagline = false, size = 'md' }) {
-  const sizeMap = {
-    sm: 'h-8',
-    md: 'h-10',
-    lg: 'h-16',
-    xl: 'h-24',
+export default function ToriiLogo({ 
+  variant = 'horizontal', 
+  className = '', 
+  showTagline = false, 
+  size = 'md',
+  dark = false
+}) {
+  const iconSizeMap = {
+    sm: 'w-7 h-7',
+    md: 'w-9 h-9',
+    lg: 'w-14 h-14',
+    xl: 'w-20 h-20',
   };
 
-  const currentSize = sizeMap[size] || 'h-10';
+  const wordmarkSizeMap = {
+    sm: 'h-4',
+    md: 'h-5',
+    lg: 'h-7',
+    xl: 'h-10',
+  };
+
+  const iconClass = iconSizeMap[size] || 'w-9 h-9';
+  const wordmarkClass = wordmarkSizeMap[size] || 'h-5';
+  const textColor = dark ? 'white' : '#0f172a';
 
   if (variant === 'full') {
     return (
-      <div className={`flex flex-col items-center text-center space-y-2 ${className}`}>
-        <img
-          src="/torii-logo.jpg"
-          alt="Torii - Legacy Behind. Resolution Ahead."
-          className={`${currentSize} object-contain rounded-2xl shadow-sm border border-slate-200/50`}
-        />
-        {showTagline && (
-          <p className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">
-            Legacy Behind. Resolution Ahead.
-          </p>
-        )}
+      <div className={`flex flex-col items-center text-center space-y-2.5 ${className}`}>
+        <ToriiMiniLogo className={iconClass} />
+        <div className="flex flex-col items-center">
+          <span className="sr-only">Torii</span>
+          <ToriiWordmark className={`${wordmarkClass} w-auto`} fill={textColor} animated />
+          {showTagline && (
+            <p className="text-[10px] font-bold text-cyan-600 tracking-widest uppercase mt-1.5">
+              Legacy Behind. Resolution Ahead.
+            </p>
+          )}
+        </div>
       </div>
     );
   }
 
   if (variant === 'icon') {
     return (
-      <img
-        src="/torii-logo.jpg"
-        alt="Torii Logo Icon"
-        className={`${currentSize} w-auto object-contain rounded-xl shadow-sm ${className}`}
-      />
+      <div className={`inline-flex items-center justify-center ${className}`}>
+        <ToriiMiniLogo className={iconClass} />
+      </div>
     );
   }
 
   // Default 'horizontal' layout
   return (
     <div className={`flex items-center space-x-3 ${className}`}>
-      <img
-        src="/torii-logo.jpg"
-        alt="Torii Logo"
-        className={`${currentSize} w-auto object-contain rounded-xl shadow-sm border border-slate-200/30`}
-      />
+      <ToriiMiniLogo className={iconClass} />
       <div>
-        <div className="flex items-center space-x-1">
-          <span className="text-lg font-extrabold tracking-tight text-slate-900">Torii</span>
+        <div className="flex items-center space-x-1.5">
+          <span className="sr-only">Torii</span>
+          <ToriiWordmark className={`${wordmarkClass} w-auto`} fill={textColor} animated />
           <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
         </div>
         {showTagline && (
-          <p className="text-[9px] font-bold text-cyan-600 tracking-wider uppercase">
+          <p className="text-[9px] font-bold text-cyan-600 tracking-wider uppercase mt-0.5">
             Legacy Behind. Resolution Ahead.
           </p>
         )}

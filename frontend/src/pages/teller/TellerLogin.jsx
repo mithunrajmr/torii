@@ -14,6 +14,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Loader2, LogIn, Eye, EyeOff } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
+import ToriiMicroLoader from '../../components/ToriiMicroLoader.jsx';
 
 export default function TellerLogin() {
   const navigate = useNavigate();
@@ -186,7 +187,7 @@ export default function TellerLogin() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <ToriiMicroLoader size={18} color="#ffffff" />
                   <span>Authenticating…</span>
                 </>
               ) : (

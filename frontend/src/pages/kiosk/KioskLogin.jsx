@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Delete, RotateCcw, ArrowRight, Lock, KeyRound, AlertCircle } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
+import ToriiMicroLoader from '../../components/ToriiMicroLoader.jsx';
 
 export default function KioskLogin() {
   const navigate = useNavigate();
@@ -405,8 +406,17 @@ export default function KioskLogin() {
                   : 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-400'
               }`}
             >
-              <span>{loading ? 'Validating Account...' : 'Send Authentication OTP'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <ToriiMicroLoader size={18} color="#ffffff" />
+                  <span>Validating Account...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2">
+                  <span>Send Authentication OTP</span>
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              )}
             </button>
           ) : (
             <button
@@ -418,8 +428,17 @@ export default function KioskLogin() {
                   : 'bg-slate-300 text-slate-500 cursor-not-allowed border border-slate-400'
               }`}
             >
-              <span>{loading ? 'Verifying OTP...' : 'Verify OTP & Continue'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <ToriiMicroLoader size={18} color="#ffffff" />
+                  <span>Verifying OTP...</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2">
+                  <span>Verify OTP & Continue</span>
+                  <ArrowRight className="w-4 h-4" />
+                </div>
+              )}
             </button>
           )}
 

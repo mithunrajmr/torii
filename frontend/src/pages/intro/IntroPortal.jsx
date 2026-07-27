@@ -1,0 +1,338 @@
+// frontend/src/pages/intro/IntroPortal.jsx
+import React, { useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, LayoutDashboard, Monitor, Smartphone, Sparkles } from 'lucide-react';
+
+export default function IntroPortal({ onEnter }) {
+  const navigate = useNavigate();
+  const backRef = useRef(null);
+  const midRef = useRef(null);
+  const frontRef = useRef(null);
+
+  useEffect(() => {
+    let mouseX = 0;
+    let mouseY = 0;
+    let ticking = false;
+
+    function update() {
+      if (backRef.current) {
+        backRef.current.style.transform = `translate3d(${mouseX * -10}px, ${mouseY * -10}px, 0)`;
+      }
+      if (midRef.current) {
+        midRef.current.style.transform = `translate3d(${mouseX * -5}px, ${mouseY * -5}px, 0)`;
+      }
+      if (frontRef.current) {
+        frontRef.current.style.transform = `translate3d(${mouseX * 15}px, ${mouseY * 15}px, 0)`;
+      }
+      ticking = false;
+    }
+
+    function requestTick() {
+      if (!ticking) {
+        requestAnimationFrame(update);
+        ticking = true;
+      }
+    }
+
+    function handleMouseMove(e) {
+      mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+      requestTick();
+    }
+
+    function handleMouseLeave() {
+      mouseX = 0;
+      mouseY = 0;
+      requestTick();
+    }
+
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    window.addEventListener('mouseleave', handleMouseLeave, { passive: true });
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, []);
+
+  const handleProceed = (targetPath = '/landing') => {
+    if (onEnter) {
+      onEnter(targetPath);
+    } else {
+      navigate(targetPath);
+    }
+  };
+
+  return (
+    <div className="relative min-h-screen bg-[#ecf1ff] flex flex-col items-center justify-between p-4 md:p-8 overflow-hidden select-none">
+      {/* Dynamic inline styles for the bloom & warp keyframes matching final-4-upgrade.html */}
+      <style>{`
+        .portal-scene-svg {
+          width: 100%;
+          height: auto;
+          overflow: visible;
+          shape-rendering: geometricPrecision;
+          animation: scene-bloom 1.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .parallax-layer {
+          transition: transform 0.15s ease-out;
+          will-change: transform;
+          transform-style: preserve-3d;
+          backface-visibility: hidden;
+        }
+
+        @keyframes scene-bloom {
+          0% { opacity: 0; transform: scale(0.7); filter: brightness(0) blur(20px); }
+          40% { opacity: 1; transform: scale(1.02); filter: brightness(2.2) blur(3px); }
+          100% { opacity: 1; transform: scale(1); filter: brightness(1) blur(0px); drop-shadow(0 20px 50px rgba(0, 212, 170, 0.25)); }
+        }
+
+        @keyframes portal-ignition {
+          0% { opacity: 0; transform: scale(0.2); filter: brightness(4); }
+          70% { opacity: 1; transform: scale(1.05); filter: brightness(1.5); }
+          100% { opacity: 0.85; transform: scale(1); filter: brightness(1); }
+        }
+
+        @keyframes portal-pulse {
+          0%, 100% { opacity: 0.85; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.02); }
+        }
+
+        .glowing-portal {
+          transform-origin: 400px 400px;
+          will-change: transform, opacity, filter;
+          animation: portal-ignition 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both, portal-pulse 4s ease-in-out 1.6s infinite;
+        }
+
+        @keyframes elem1-entrance {
+          0% { opacity: 0; transform: translateY(-500px) scale(0.6); filter: brightness(3) blur(8px); }
+          75% { opacity: 1; transform: translateY(12px) scale(1.02); filter: brightness(1.3) blur(0px); }
+          100% { opacity: 1; transform: translateY(0px) scale(1); filter: brightness(1) blur(0px); }
+        }
+        @keyframes elem1-idle { 0%, 100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-7px) rotate(0.4deg); } }
+
+        @keyframes elem2-entrance {
+          0% { opacity: 0; transform: translateX(600px) scaleX(1.5); filter: brightness(3) blur(8px); }
+          75% { opacity: 1; transform: translateX(-12px) scaleX(0.98); filter: brightness(1.3) blur(0px); }
+          100% { opacity: 1; transform: translateX(0px) scaleX(1); filter: brightness(1) blur(0px); }
+        }
+        @keyframes elem2-idle { 0%, 100% { transform: translateY(0px) scaleX(1); } 50% { transform: translateY(-5px) scaleX(1.008); } }
+
+        @keyframes elem3-entrance {
+          0% { opacity: 0; transform: translateX(-600px) scaleX(1.5); filter: brightness(3) blur(8px); }
+          75% { opacity: 1; transform: translateX(12px) scaleX(0.98); filter: brightness(1.3) blur(0px); }
+          100% { opacity: 1; transform: translateX(0px) scaleX(1); filter: brightness(1) blur(0px); }
+        }
+        @keyframes elem3-idle { 0%, 100% { transform: translateY(0px) scaleX(1); } 50% { transform: translateY(-6px) scaleX(1.005); } }
+
+        @keyframes elem4-entrance {
+          0% { opacity: 0; transform: translate(400px, 500px) rotate(15deg); filter: brightness(3) blur(8px); }
+          75% { opacity: 1; transform: translate(-10px, -10px) rotate(-2deg); filter: brightness(1.3) blur(0px); }
+          100% { opacity: 1; transform: translate(0px, 0px) rotate(0deg); filter: brightness(1) blur(0px); }
+        }
+        @keyframes elem4-idle { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(2px, -4px) rotate(0.3deg); } }
+
+        @keyframes elem5-entrance {
+          0% { opacity: 0; transform: translate(-400px, 500px) rotate(-15deg); filter: brightness(3) blur(8px); }
+          75% { opacity: 1; transform: translate(10px, -10px) rotate(2deg); filter: brightness(1.3) blur(0px); }
+          100% { opacity: 1; transform: translate(0px, 0px) rotate(0deg); filter: brightness(1) blur(0px); }
+        }
+        @keyframes elem5-idle { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-2px, -4px) rotate(-0.3deg); } }
+
+        .torii-elem-1-wrap { transform-origin: 400px 120px; animation: elem1-entrance 2s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+        .torii-elem-1 { transform-origin: 400px 120px; animation: elem1-idle 4s ease-in-out 2.2s infinite; }
+        .torii-elem-2-wrap { transform-origin: 400px 167px; animation: elem2-entrance 2s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both; }
+        .torii-elem-2 { transform-origin: 400px 167px; animation: elem2-idle 4s ease-in-out 2.35s infinite; }
+        .torii-elem-3-wrap { transform-origin: 400px 253px; animation: elem3-entrance 2s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both; }
+        .torii-elem-3 { transform-origin: 400px 253px; animation: elem3-idle 4s ease-in-out 2.5s infinite; }
+        .torii-elem-4-wrap { transform-origin: 600px 370px; animation: elem4-entrance 2s cubic-bezier(0.16, 1, 0.3, 1) 0.65s both; }
+        .torii-elem-4 { transform-origin: 600px 370px; animation: elem4-idle 4s ease-in-out 2.65s infinite; }
+        .torii-elem-5-wrap { transform-origin: 210px 370px; animation: elem5-entrance 2s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both; }
+        .torii-elem-5 { transform-origin: 210px 370px; animation: elem5-idle 4s ease-in-out 2.8s infinite; }
+
+        @keyframes phone-warp-in { 0% { opacity: 0; transform: translateY(70px) scale(0.4); filter: brightness(3); } 100% { opacity: 1; transform: translateY(0px) scale(1); filter: brightness(1); } }
+        @keyframes float-phone { 0%, 100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-15px) rotate(1deg); } }
+
+        .phone-wrapper {
+          transform-origin: 400px 400px;
+          will-change: transform, opacity;
+          animation: phone-warp-in 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s both, float-phone 5s ease-in-out 1.8s infinite;
+        }
+
+        @keyframes draw-check { 0% { stroke-dashoffset: 60; opacity: 0; } 20% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
+        @keyframes pop-circle { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+
+        .check-circle { transform-origin: 400px 405px; animation: pop-circle 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 1.3s both; }
+        .check-icon { stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw-check 0.8s cubic-bezier(0.65, 0, 0.45, 1) 1.5s both; }
+
+        @keyframes speed-entrance-left {
+          0% { opacity: 0; transform: translateX(-180px) scaleX(2); filter: brightness(2); }
+          70% { opacity: 1; transform: translateX(10px) scaleX(0.95); filter: brightness(1.2); }
+          100% { opacity: 1; transform: translateX(0) scaleX(1); filter: brightness(1); }
+        }
+        @keyframes speed-entrance-right {
+          0% { opacity: 0; transform: translateX(180px) scaleX(2); filter: brightness(2); }
+          70% { opacity: 1; transform: translateX(-10px) scaleX(0.95); filter: brightness(1.2); }
+          100% { opacity: 1; transform: translateX(0) scaleX(1); filter: brightness(1); }
+        }
+
+        @keyframes speed-shoot-left { 0%, 100% { transform: translateX(0) scaleX(1); opacity: 0.3; } 50% { transform: translateX(-15px) scaleX(1.15); opacity: 1; } }
+        @keyframes speed-shoot-right { 0%, 100% { transform: translateX(0) scaleX(1); opacity: 0.3; } 50% { transform: translateX(15px) scaleX(1.15); opacity: 1; } }
+
+        .speed-left { animation: speed-entrance-left 1.2s cubic-bezier(0.16, 1, 0.3, 1) 1.1s both; transform-origin: center center; }
+        .speed-right { animation: speed-entrance-right 1.2s cubic-bezier(0.16, 1, 0.3, 1) 1.1s both; transform-origin: center center; }
+        .speed-left rect, .speed-left circle { animation: speed-shoot-left 2s ease-in-out 2.3s infinite; transform-origin: right center; }
+        .speed-right rect, .speed-right circle { animation: speed-shoot-right 2s ease-in-out 2.3s infinite; transform-origin: left center; }
+
+        .speed-left rect:nth-child(1) { animation-delay: 2.3s; }
+        .speed-left rect:nth-child(2) { animation-delay: 2.6s; }
+        .speed-left rect:nth-child(3) { animation-delay: 2.45s; }
+        .speed-right rect:nth-child(1) { animation-delay: 2.5s; }
+        .speed-right rect:nth-child(2) { animation-delay: 2.7s; }
+        .speed-right rect:nth-child(3) { animation-delay: 2.4s; }
+      `}</style>
+
+      {/* Header Banner */}
+      <header className="z-10 text-center mt-2 animate-fade-in">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/80 backdrop-blur-md border border-cyan-200/60 shadow-sm mb-3">
+          <Sparkles className="w-4 h-4 text-cyan-600 animate-pulse" />
+          <span className="text-xs font-bold tracking-widest text-cyan-900 uppercase">
+            TORII ARCHITECTURE v4.0
+          </span>
+        </div>
+        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-900 drop-shadow-sm">
+          TORII <span className="bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-400 bg-clip-text text-transparent">PORTAL</span>
+        </h1>
+        <p className="text-xs md:text-sm font-semibold text-slate-600 mt-1 max-w-md mx-auto">
+          Autonomous Branch Operations & AI Compliance Engine
+        </p>
+      </header>
+
+      {/* SVG Cinematic Portal (From final-4-upgrade.html) */}
+      <div className="portal-container w-full max-w-[800px] my-auto py-2 px-4 z-0 cursor-pointer" onClick={() => handleProceed('/landing')}>
+        <svg className="portal-scene-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="mainGradient" x1="5%" y1="0%" x2="95%" y2="0%">
+              <stop offset="0%" stopColor="#0951d3" />
+              <stop offset="45%" stopColor="#00a3da" />
+              <stop offset="100%" stopColor="#00d1ac" />
+            </linearGradient>
+            <linearGradient id="floorGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+              <stop offset="30%" stopColor="#a8f5e5" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="#00d1ac" stopOpacity="0.05" />
+            </linearGradient>
+            <linearGradient id="archGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#72eee0" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="0.4" />
+            </linearGradient>
+          </defs>
+
+          {/* LAYER 1: BACKGROUND GLOW & FLOOR */}
+          <g className="parallax-layer" id="layer-back" ref={backRef}>
+            <g className="glowing-portal">
+              <polygon points="340,480 460,480 540,580 260,580" fill="url(#floorGradient)" />
+              <path d="M 270,550 L 270,330 C 270,250 330,210 400,210 C 470,210 530,250 530,330 L 530,550 Z" fill="url(#archGradient)" opacity="0.75" />
+              <path d="M 310,520 L 310,340 C 310,280 350,250 400,250 C 450,250 490,280 490,340 L 490,520 Z" fill="url(#archGradient)" opacity="0.9" />
+              <path d="M 340,500 L 340,350 C 340,300 365,280 400,280 C 435,280 460,300 460,350 L 460,500 Z" fill="#ffffff" opacity="1" />
+            </g>
+          </g>
+
+          {/* SPEED LINES */}
+          <g className="speed-lines-group">
+            <g className="speed-left" fill="#0951d3">
+              <rect x="70" y="350" width="100" height="14" rx="7" />
+              <rect x="50" y="385" width="130" height="14" rx="7" />
+              <rect x="90" y="420" width="80" height="14" rx="7" />
+              <circle cx="55" cy="357" r="7" />
+              <circle cx="35" cy="392" r="7" />
+              <circle cx="70" cy="427" r="7" />
+            </g>
+            <g className="speed-right" fill="#00d1ac">
+              <rect x="630" y="350" width="100" height="14" rx="7" />
+              <rect x="620" y="385" width="130" height="14" rx="7" />
+              <rect x="630" y="420" width="80" height="14" rx="7" />
+              <circle cx="745" cy="357" r="7" />
+              <circle cx="765" cy="392" r="7" />
+              <circle cx="725" cy="427" r="7" />
+            </g>
+          </g>
+
+          {/* LAYER 2: TORII GATE */}
+          <g className="parallax-layer" id="layer-mid" ref={midRef}>
+            <g className="torii-gate" fill="url(#mainGradient)">
+              {/* 5: Left Pillar */}
+              <g className="torii-elem-5-wrap">
+                <polygon className="torii-elem-5" points="190,190 250,190 230,550 170,550" />
+              </g>
+              {/* 4: Right Pillar */}
+              <g className="torii-elem-4-wrap">
+                <polygon className="torii-elem-4" points="550,190 610,190 630,550 570,550" />
+              </g>
+              {/* 3: Middle Tie Beam */}
+              <g className="torii-elem-3-wrap">
+                <rect className="torii-elem-3" x="150" y="235" width="500" height="36" rx="4" />
+              </g>
+              {/* 2: Upper Sub-beam */}
+              <g className="torii-elem-2-wrap">
+                <path className="torii-elem-2" d="M 120,150 L 680,150 L 670,185 L 130,185 Z" />
+              </g>
+              {/* 1: Top Curve Beam */}
+              <g className="torii-elem-1-wrap">
+                <path className="torii-elem-1" d="M 70,85 C 260,145 540,145 730,85 C 705,130 685,140 670,155 L 130,155 C 115,140 95,130 70,85 Z" />
+              </g>
+            </g>
+          </g>
+
+          {/* LAYER 3: MOBILE PHONE & CHECKMARK */}
+          <g className="parallax-layer" id="layer-front" ref={frontRef}>
+            <g className="phone-wrapper">
+              <rect x="360" y="330" width="80" height="150" rx="18" fill="#ffffff" stroke="#00d1ac" strokeWidth="7" />
+              <line x1="390" y1="345" x2="410" y2="345" stroke="#00d1ac" strokeWidth="4" strokeLinecap="round" />
+              <circle className="check-circle" cx="400" cy="405" r="24" fill="none" stroke="#00d1ac" strokeWidth="6" />
+              <polyline className="check-icon" points="388,405 396,413 414,395" fill="none" stroke="#00d1ac" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      {/* Primary Action Controls */}
+      <footer className="z-10 w-full max-w-2xl mx-auto flex flex-col items-center gap-4 mb-4">
+        <button
+          onClick={() => handleProceed('/landing')}
+          className="group relative px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-cyan-600 to-emerald-500 text-white font-extrabold text-base tracking-wide shadow-xl hover:shadow-2xl hover:scale-[1.03] transition-all duration-300 flex items-center gap-3 cursor-pointer overflow-hidden border border-white/30"
+        >
+          <span className="absolute inset-0 bg-white/20 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+          <span>ENTER TORII PLATFORM</span>
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </button>
+
+        {/* Quick Launchpad Shortcuts */}
+        <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+          <button
+            onClick={() => handleProceed('/landing')}
+            className="px-3.5 py-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 font-bold border border-slate-200/80 shadow-sm flex items-center gap-1.5 transition-all hover:scale-105"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
+            Landing Hub
+          </button>
+          <button
+            onClick={() => handleProceed('/kiosk/login')}
+            className="px-3.5 py-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 font-bold border border-slate-200/80 shadow-sm flex items-center gap-1.5 transition-all hover:scale-105"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-cyan-600" />
+            Kiosk Login
+          </button>
+          <button
+            onClick={() => handleProceed('/teller/login')}
+            className="px-3.5 py-2 rounded-xl bg-white/90 hover:bg-white text-slate-700 font-bold border border-slate-200/80 shadow-sm flex items-center gap-1.5 transition-all hover:scale-105"
+          >
+            <Monitor className="w-3.5 h-3.5 text-emerald-600" />
+            Teller Workstation
+          </button>
+        </div>
+      </footer>
+    </div>
+  );
+}

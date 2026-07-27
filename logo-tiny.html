@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Torii Gate Micro-Loader</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0f19;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      gap: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    Example UI Button wrapping the micro-loader
+    .submit-btn {
+      background: linear-gradient(135deg, #0951d3, #00d1ac);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(0, 209, 172, 0.3);
+      transition: transform 0.1s ease;
+    }
+    .submit-btn:active { transform: scale(0.98); }
+
+    /* ================= THE MICRO-LOADER SIZING ================= */
+    .micro-loader {
+      width: 24px;  /* Change to 16px for favicon, 32px for larger badges */
+      height: 24px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    /* 1. Spinning Neon Arc */
+    @keyframes spin-ring {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .spinner-ring {
+      transform-origin: 50px 60px;
+      animation: spin-ring 0.8s linear infinite;
+    }
+
+    /* 2. Subtle Gate Breathing */
+    @keyframes micro-pulse {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1; filter: drop-shadow(0 0 4px #00d1ac); }
+    }
+    .gate-silhouette {
+      animation: micro-pulse 1.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Example 1: Inside a clickable button -->
+
+  <div class="micro-loader">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="microGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ffffff" />
+          <stop offset="100%" stop-color="#a8f5e5" />
+        </linearGradient>
+      </defs>
+
+      <!-- SIMPLIFIED TORII GATE SILHOUETTE -->
+      <g class="gate-silhouette" fill="url(#microGrad)">
+        <!-- Left & Right Thicker Pillars -->
+        <rect x="20" y="25" width="10" height="65" rx="3" />
+        <rect x="70" y="25" width="10" height="65" rx="3" />
+        <!-- Middle Beam (Nuki) -->
+        <rect x="14" y="38" width="72" height="8" rx="2" />
+        <!-- Top Curved Roof (Kasagi) -->
+        <path d="M 6,18 Q 50,28 94,18 L 90,28 L 10,28 Z" />
+      </g>
+
+      <!-- CENTER SPINNING RING -->
+      <circle cx="50" cy="60" r="16" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="5" />
+      <circle class="spinner-ring" cx="50" cy="60" r="16" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-dasharray="30 70" />
+      
+      <!-- STATIC MICRO CHECKMARK -->
+      <polyline points="44,60 48,65 57,54" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </div>

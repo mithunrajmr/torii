@@ -1,13 +1,14 @@
 // frontend/src/pages/teller/QueueList.jsx
 import React from 'react';
 import { ShieldAlert, CheckCircle, History, Inbox } from 'lucide-react';
+import ToriiGateLoader from '../../components/ToriiGateLoader.jsx';
 
 export default function QueueList({ tickets, selectedTicket, onSelectTicket, loading, filterMode, onFilterChange }) {
   if (loading) {
     return (
       <div className="neo-card p-6 h-full flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin mx-auto" />
+          <ToriiGateLoader size={64} className="mx-auto" />
           <p className="text-xs text-slate-500 font-medium">Loading tickets...</p>
         </div>
       </div>
