@@ -355,6 +355,53 @@ export default function Dashboard() {
                               {ocrData.id_type || 'PAN'} · {ocrData.dob || 'N/A'}
                             </span>
                           </div>
+                          {/* Multi-Service Specific Fields */}
+                          {ocrData.service_type && (
+                            <div className="flex justify-between py-1 border-b border-slate-300">
+                              <span className="text-slate-500 font-medium">Service Category:</span>
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-extrabold text-[10px] rounded border border-blue-200 uppercase">
+                                {ocrData.service_type}
+                              </span>
+                            </div>
+                          )}
+
+                          {ocrData.address_line1 && (
+                            <div className="py-1 border-b border-slate-300 text-left space-y-0.5">
+                              <span className="text-slate-500 font-medium block">New Requested Address:</span>
+                              <span className="font-bold text-slate-800 block">
+                                {ocrData.address_line1}{ocrData.address_line2 ? `, ${ocrData.address_line2}` : ''}, {ocrData.city || ''}, {ocrData.state || ''} - {ocrData.pincode || ''}
+                              </span>
+                            </div>
+                          )}
+
+                          {ocrData.nominee_name && (
+                            <div className="py-1 border-b border-slate-300 text-left space-y-0.5">
+                              <span className="text-slate-500 font-medium block">Nominee Nomination:</span>
+                              <span className="font-bold text-slate-800 block">
+                                {ocrData.nominee_name} ({ocrData.relationship || 'Beneficiary'}) {ocrData.nominee_dob ? `· DOB: ${ocrData.nominee_dob}` : ''}
+                                {ocrData.is_minor ? ` · Minor (Guardian: ${ocrData.guardian_name || 'N/A'})` : ''}
+                              </span>
+                            </div>
+                          )}
+
+                          {ocrData.aadhaar_number && (
+                            <div className="flex justify-between py-1 border-b border-slate-300">
+                              <span className="text-slate-500 font-medium">Aadhaar Number:</span>
+                              <span className="font-mono font-bold text-blue-600">
+                                ****-****-{String(ocrData.aadhaar_number).slice(-4)}
+                              </span>
+                            </div>
+                          )}
+
+                          {ocrData.transaction_amount && (
+                            <div className="py-1 border-b border-slate-300 text-left space-y-0.5">
+                              <span className="text-slate-500 font-medium block">High-Value Clearance Request:</span>
+                              <span className="font-bold text-emerald-700 block">
+                                ₹{Number(ocrData.transaction_amount).toLocaleString('en-IN')} · Source: {ocrData.source_of_funds || 'Declared'} (To: {ocrData.beneficiary_name || 'N/A'})
+                              </span>
+                            </div>
+                          )}
+
                           <div className="flex justify-between py-1 border-b border-slate-300">
                             <span className="text-slate-500 font-medium">Clarity / Confidence:</span>
                             <span className="font-bold text-emerald-600">
@@ -379,6 +426,20 @@ export default function Dashboard() {
                               {ocrData.is_specimen_or_dummy ? '⚠️ SPECIMEN / DUMMY' : '✓ GENUINE'}
                             </span>
                           </div>
+                          {/* Digital Signature Display */}
+                          {(selectedTicket.digital_signature_path || ocrData.signature || selectedTicket.document_path?.startsWith('data:image')) && (
+                            <div className="py-2 border-b border-slate-300 text-left space-y-1">
+                              <span className="text-slate-500 font-medium text-[11px] block">Attached Customer Digital E-Signature:</span>
+                              <div className="p-2 bg-slate-100 rounded-xl border border-slate-300 flex items-center justify-center max-h-16">
+                                <img
+                                  src={selectedTicket.digital_signature_path || ocrData.signature || selectedTicket.document_path}
+                                  alt="Customer Signature"
+                                  className="max-h-12 object-contain"
+                                />
+                              </div>
+                            </div>
+                          )}
+
                           {ocrData.rejection_reason && (
                             <div className="flex justify-between py-1 text-red-600 bg-red-50 p-2 rounded-lg mt-1">
                               <span className="font-bold">Rejection Flag:</span>

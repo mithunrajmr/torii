@@ -1,86 +1,112 @@
 // frontend/src/components/DigitalSignaturePad.jsx
-import React, { useRef, useState, useEffect } from 'react';
-import { Edit3, RotateCcw, CheckCircle2, Type } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { Edit3, RotateCcw, CheckCircle2, Type, PenTool } from 'lucide-react';
 
 export default function DigitalSignaturePad({ onSave, initialName = '' }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
   const [useTypeMode, setUseTypeMode] = useState(false);
   const [typedSignature, setTypedSignature] = useState(initialName);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const initContext = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext?.('2d');
+    if (!ctx) return null;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f172a'; // Bold Midnight Black Ink
+    return ctx;
+  }, []);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext?.('2d');
-    if (!ctx) return;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1e3a8a'; // Deep blue ink
-  }, [useTypeMode]);
+    if (!useTypeMode) {
+      initContext();
+    }
+  }, [useTypeMode, initContext]);
 
-  const startDrawing = (e) => {
+  const getCanvasCoords = (e) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext?.('2d');
-    if (!ctx) return;
+    if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
+  const startDrawing = (e) => {
+    const ctx = initContext();
+    if (!ctx) return;
+    const { x, y } = getCanvasCoords(e);
+
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo(x, y);
     setIsDrawing(true);
   };
 
   const draw = (e) => {
     if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext?.('2d');
+    const ctx = initContext();
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const { x, y } = getCanvasCoords(e);
 
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineTo(x, y);
     ctx.stroke();
-    setHasSignature(true);
+    setHasDrawn(true);
   };
 
   const stopDrawing = () => {
+    if (!isDrawing) return;
     setIsDrawing(false);
-    if (hasSignature && onSave && canvasRef.current) {
+    if (canvasRef.current) {
       try {
-        onSave(canvasRef.current.toDataURL('image/png'));
+        const dataUrl = canvasRef.current.toDataURL('image/png');
+        setPreviewUrl(dataUrl);
+        if (onSave) onSave(dataUrl);
       } catch (_) {}
     }
   };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext?.('2d');
-    if (ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas) {
+      const ctx = canvas.getContext?.('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     }
-    setHasSignature(false);
+    setHasDrawn(false);
+    setPreviewUrl(null);
     if (onSave) onSave(null);
   };
 
   const handleTypedChange = (e) => {
     const val = e.target.value;
     setTypedSignature(val);
-    if (val.trim() && onSave) {
-      // Create SVG-based text data URL for typed signature
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="80"><text x="10" y="50" font-family="Dancing Script, cursive, Brush Script MT, sans-serif" font-size="32" fill="#1e3a8a">${val.trim()}</text></svg>`;
-      const encoded = 'data:image/svg+xml;base64,' + btoa(svg);
-      onSave(encoded);
+    if (val.trim()) {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100"><rect width="100%" height="100%" fill="#ffffff"/><text x="20" y="65" font-family="'Dancing Script', 'Brush Script MT', cursive, serif" font-size="36" font-weight="bold" fill="#0f172a">${val.trim()}</text></svg>`;
+      const dataUrl = 'data:image/svg+xml;base64,' + btoa(svg);
+      setPreviewUrl(dataUrl);
+      if (onSave) onSave(dataUrl);
+    } else {
+      setPreviewUrl(null);
+      if (onSave) onSave(null);
     }
   };
 
   return (
     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-2xl space-y-3" data-testid="digital-signature-pad">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Edit3 className="w-4 h-4 text-blue-400" />
@@ -108,12 +134,13 @@ export default function DigitalSignaturePad({ onSave, initialName = '' }) {
         </button>
       </div>
 
+      {/* Signature Box */}
       {!useTypeMode ? (
         <div className="relative">
           <canvas
             ref={canvasRef}
-            width={320}
-            height={100}
+            width={600}
+            height={160}
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}
@@ -121,10 +148,11 @@ export default function DigitalSignaturePad({ onSave, initialName = '' }) {
             onTouchStart={startDrawing}
             onTouchMove={draw}
             onTouchEnd={stopDrawing}
-            className="w-full h-24 bg-slate-100 rounded-xl border border-slate-300 touch-none cursor-crosshair"
+            className="w-full h-28 bg-white rounded-xl border-2 border-slate-300 touch-none cursor-crosshair shadow-inner"
           />
-          {!hasSignature && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          {!hasDrawn && (
+            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center space-y-1">
+              <PenTool className="w-5 h-5 text-slate-400 opacity-60" />
               <span className="text-xs text-slate-400 font-medium italic">Sign inside box using touch or mouse</span>
             </div>
           )}
@@ -136,11 +164,11 @@ export default function DigitalSignaturePad({ onSave, initialName = '' }) {
             value={typedSignature}
             onChange={handleTypedChange}
             placeholder="Type your full legal name"
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-xl text-sm font-semibold text-white focus:border-blue-500 outline-none"
+            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-600 rounded-xl text-sm font-semibold text-white focus:border-blue-500 outline-none"
           />
           {typedSignature.trim() && (
-            <div className="p-3 bg-slate-100 rounded-xl text-center">
-              <span className="text-2xl font-serif text-blue-900 italic tracking-wider">
+            <div className="p-3 bg-white rounded-xl text-center border border-slate-300 shadow-inner">
+              <span className="text-3xl font-serif text-slate-900 italic tracking-wider font-bold">
                 {typedSignature.trim()}
               </span>
             </div>
@@ -148,6 +176,7 @@ export default function DigitalSignaturePad({ onSave, initialName = '' }) {
         </div>
       )}
 
+      {/* Footer / Controls */}
       <div className="flex justify-between items-center pt-1">
         <button
           type="button"
@@ -157,11 +186,17 @@ export default function DigitalSignaturePad({ onSave, initialName = '' }) {
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Clear</span>
         </button>
-        {(hasSignature || (useTypeMode && typedSignature.trim())) && (
-          <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Signature Attached</span>
-          </span>
+
+        {previewUrl && (
+          <div className="flex items-center space-x-2">
+            <div className="bg-white px-2 py-0.5 rounded-lg border border-slate-300 flex items-center">
+              <img src={previewUrl} alt="Signature Preview" className="h-6 object-contain" />
+            </div>
+            <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Signature Attached</span>
+            </span>
+          </div>
         )}
       </div>
     </div>

@@ -188,7 +188,7 @@ export async function processVisionOCR(fileBuffer, mimeType = 'image/jpeg') {
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const modelName = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   const prompt = `You are the TORII Vision Compliance & Anti-Fraud Inspection Engine (Specification TORII-VIS-FRAUD-2026).
 Analyze the uploaded document image strictly from the perspective of a HUMAN BANK COMPLIANCE OFFICER inspecting a physical document before legal archiving.

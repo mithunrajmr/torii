@@ -98,11 +98,19 @@ export default function QueueList({ tickets, selectedTicket, onSelectTicket, loa
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center text-xs text-slate-500">
-                    <span>{t.ocr_data?.name || 'PAN Upload'}</span>
+                  <div className="flex justify-between items-center text-xs text-slate-500 mt-1">
+                    <span className="font-semibold text-slate-700">{t.ocr_data?.name || t.ocr_data?.full_name || 'Branch Request'}</span>
                     <span className="text-[10px] text-slate-400">
                       {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-extrabold rounded-md border border-blue-200 uppercase">
+                      {t.ocr_data?.service_type || 'PAN_LINK'}
+                    </span>
+                    {t.ocr_data?.pan_number && (
+                      <span className="font-mono text-[10px] text-slate-400 font-semibold">{t.ocr_data.pan_number}</span>
+                    )}
                   </div>
                 </div>
               );

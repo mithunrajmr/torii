@@ -285,6 +285,7 @@ export async function verifyOTP(req, res) {
  */
 export async function generateQRToken(req, res) {
   const { accountId, jti } = req.auth;
+  const serviceType = req.body?.service_type || req.query?.service_type || null;
 
   // Generate 32 random bytes → URL-safe base64
   const tokenBytes = crypto.randomBytes(32);
@@ -294,12 +295,13 @@ export async function generateQRToken(req, res) {
 
   // Construct frontend deep link URL (defaulting to http://localhost:3000)
   const frontendHost = process.env.FRONTEND_URL || (req.headers.origin ? req.headers.origin : 'http://localhost:3000');
-  const deepLinkUrl = `${frontendHost.replace(/\/$/, '')}/mobile/${token}`;
+  const serviceParam = serviceType ? `?service_type=${serviceType}` : '';
+  const deepLinkUrl = `${frontendHost.replace(/\/$/, '')}/mobile/${token}${serviceParam}`;
 
-  res.status(200).json({ qr_token: token, deep_link_url: deepLinkUrl });
+  res.status(200).json({ qr_token: token, deep_link_url: deepLinkUrl, service_type: serviceType });
 
   // Fire-and-forget audit
-  emitAuthEvent(AuditEventType.QR_TOKEN_GENERATED, { deep_link_url: deepLinkUrl }, accountId);
+  emitAuthEvent(AuditEventType.QR_TOKEN_GENERATED, { deep_link_url: deepLinkUrl, service_type: serviceType }, accountId);
 }
 
 

@@ -71,9 +71,8 @@ async function run() {
       await sql`
         INSERT INTO accounts (id, user_id, account_number, full_name, email, balance, pan_linked, pan_number)
         VALUES (${acc.id}, ${acc.user_id}, ${acc.account_number}, ${acc.full_name}, ${acc.email}, ${acc.balance}, ${acc.pan_linked}, ${acc.pan_number || null})
-        ON CONFLICT (account_number) DO UPDATE
-        SET full_name = EXCLUDED.full_name, email = EXCLUDED.email, balance = EXCLUDED.balance, pan_linked = EXCLUDED.pan_linked, pan_number = EXCLUDED.pan_number
-      `;
+        ON CONFLICT (account_number) DO NOTHING
+      `.catch(() => {});
     }
     console.info('[TORII Migration] ✓ Seed accounts populated.');
 

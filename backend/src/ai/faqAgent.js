@@ -25,7 +25,7 @@ async function generateGeminiFaqAnswer(question) {
   if (!apiKey) return null;
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const response = await ai.models.generateContent({
       model,
       contents: [{

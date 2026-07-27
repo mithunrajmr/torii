@@ -309,13 +309,17 @@ export default function KioskTriage() {
     }
   };
 
-  const fetchQRCode = async () => {
+  const fetchQRCode = async (serviceType = null) => {
     setQrLoading(true);
     setQrExpired(false);
     try {
       const res = await fetch('/api/auth/qr/generate', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${jwt}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ service_type: serviceType }),
       });
       if (!res.ok) throw new Error('QR generation failed');
       const data = await res.json();
@@ -410,7 +414,7 @@ export default function KioskTriage() {
                   showQR: Boolean(payload.showQR),
                   streaming: false,
                 });
-                if (payload.showQR) fetchQRCode();
+                if (payload.showQR) fetchQRCode(payload.serviceType);
               }
             } catch (_) {}
           }
@@ -761,8 +765,41 @@ export default function KioskTriage() {
             </button>
           </div>
 
+          {/* Branch Operational Services Quick Launcher Grid */}
+          <div className="pt-2 border-t border-slate-200">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs text-slate-600 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-blue-600">⚡</span>
+                <span>Branch Operations & Compliance Services</span>
+              </p>
+              <span className="text-[10px] text-cyan-600 font-mono bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 font-semibold">
+                Direct Mobile Handoff
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {BRANCH_SERVICES_GRID.map((svc) => (
+                <button
+                  key={svc.id}
+                  onClick={() => fetchQRCode(svc.id)}
+                  disabled={isLoading}
+                  className="p-3 bg-[#e8ecf2] hover:bg-white rounded-2xl text-left border border-slate-200 shadow-[4px_4px_8px_#cbced1,-4px_-4px_8px_#ffffff] hover:shadow-[6px_6px_12px_#cbced1,-6px_-6px_12px_#ffffff] active:shadow-[inset_2px_2px_4px_#cbced1,inset_-2px_-2px_4px_#ffffff] transition-all cursor-pointer group flex flex-col justify-between space-y-1.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg">{svc.icon}</span>
+                    <span className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">Launch →</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{svc.label}</p>
+                    <p className="text-[9px] text-slate-400 mt-0.5 font-medium truncate">Instant QR verification</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Quick-action chips */}
-          <div>
+          <div className="pt-2">
             <p className="text-xs text-slate-400 mb-2 font-medium">Common questions:</p>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map(({ label, query }) => (

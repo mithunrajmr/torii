@@ -184,9 +184,13 @@ export async function chatWithAgentJSON(agentId, userMsg, fallback, context = {}
     const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
     const targetText = fenceMatch ? fenceMatch[1].trim() : text.trim();
 
-    // 2. Direct JSON.parse
+    // 2. Direct JSON.parse (with double-stringified unwrapping)
     try {
-      return JSON.parse(targetText);
+      let parsed = JSON.parse(targetText);
+      if (typeof parsed === 'string' && (parsed.trim().startsWith('[') || parsed.trim().startsWith('{'))) {
+        try { parsed = JSON.parse(parsed); } catch (_) {}
+      }
+      if (parsed && typeof parsed === 'object') return parsed;
     } catch (_) {}
 
     // 3. Extract single JSON array [ ... ] (handles concatenated duplicate arrays like [...][...])

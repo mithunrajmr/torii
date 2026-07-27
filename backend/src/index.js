@@ -12,6 +12,7 @@ import kioskRoutes from './routes/kioskRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
 import sandboxRoutes, { chaosInterceptor } from './routes/sandboxRoutes.js';
 import debugRoutes from './routes/debugRoutes.js';
+import serviceRoutes from './routes/serviceRoutes.js';
 import { query } from './db/index.js';
 import { set as redisSet, get as redisGet } from './cache/redisClient.js';
 

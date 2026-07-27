@@ -32,7 +32,7 @@ async function generateGeminiJSON(prompt) {
   if (!apiKey) return null;
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const response = await ai.models.generateContent({
       model,
       contents: [{ text: prompt + '\nIMPORTANT: Return ONLY a raw JSON payload with zero extra text or markdown formatting.' }],
@@ -182,11 +182,16 @@ export async function runAdvisorAgent(accountId) {
     'Return ONLY a JSON array of 3 offer objects with exact keys: ' +
     '[{"id": "1", "badge": "EXCLUSIVE", "title": "Product Title", "offer": "Personalized description for ' + firstName + '", "cta": "Action Button", "type": "FD"|"CREDIT"|"WEALTH"|"LOAN"|"INSURANCE"|"SIP"}]';
 
-  let result = await chatWithAgentJSON(ADVISOR_AGENT_ID, prompt, null);
-
-  if (!Array.isArray(result) || result.length < 2) {
-    console.log(`[AdvisorAgent] Watsonx Orchestrate unavailable or invalid, calling Gemini Flash AI for ${firstName}…`);
-    result = await generateGeminiJSON(prompt);
+  let result = null;
+  try {
+    result = await chatWithAgentJSON(ADVISOR_AGENT_ID, prompt, null);
+    if (!Array.isArray(result) || result.length < 2) {
+      console.log(`[AdvisorAgent] Watsonx Orchestrate unavailable, calling Gemini Flash AI for ${firstName}…`);
+      result = await generateGeminiJSON(prompt);
+    }
+  } catch (err) {
+    console.warn(`[AdvisorAgent] External AI agents unavailable (${err.message}). Using hyper-personalized rule engine for ${firstName}.`);
+    result = null;
   }
 
   if (Array.isArray(result) && result.length >= 1) {
