@@ -362,7 +362,7 @@ export default function KioskTriage() {
         const data = await res.json();
         const text = data.faqAnswer || data.voiceResponse || 'A teller at the counter will be happy to help you.';
         setAnswer({ text, intent: data.intent, showQR: data.showQR, streaming: false });
-        if (data.showQR && !deepLink) fetchQRCode();
+        if (data.showQR) fetchQRCode();
         return;
       }
 
@@ -400,7 +400,7 @@ export default function KioskTriage() {
                   showQR: Boolean(payload.showQR),
                   streaming: false,
                 });
-                if (payload.showQR && !deepLink) fetchQRCode();
+                if (payload.showQR) fetchQRCode();
               }
             } catch (_) {}
           }

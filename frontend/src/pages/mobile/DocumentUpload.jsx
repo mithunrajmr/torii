@@ -63,9 +63,10 @@ export default function DocumentUpload() {
             setSelectedFile(null);
             setPreviewUrl(null);
           }
-        }
- else if (data.error === 'MISMATCH_ERROR') {
-          setError('Name on document does not match account records. Please present ID to a bank teller.');
+        } else if (data.error === 'MISMATCH_ERROR') {
+          setError(data.message || 'Name on document does not match account records. Please present ID to a bank teller.');
+        } else if (data.error === 'ERR_INVALID_OR_EXPIRED_QR_TOKEN') {
+          setError(data.message || 'Your upload session has expired. Please scan a fresh QR code from the Kiosk screen.');
         } else {
           setError(data.message || 'Upload failed. Please try again.');
         }

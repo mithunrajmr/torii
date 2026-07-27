@@ -51,18 +51,27 @@ export async function uploadMobileDocument(req, res) {
   const file = req.file;
 
   if (!qr_token) {
-    return res.status(400).json({ error: 'ERR_MISSING_QR_TOKEN' });
+    return res.status(400).json({
+      error: 'ERR_MISSING_QR_TOKEN',
+      message: 'Missing QR session token. Please scan the QR code again.',
+    });
   }
 
   const sessionId = deriveSessionId(qr_token);
   // Read accountId bound to QR token (do NOT delete yet so retries on RETAKE_IMAGE work)
   const accountId = await getQRToken(qr_token);
   if (!accountId) {
-    return res.status(401).json({ error: 'ERR_INVALID_OR_EXPIRED_QR_TOKEN' });
+    return res.status(401).json({
+      error: 'ERR_INVALID_OR_EXPIRED_QR_TOKEN',
+      message: 'Your upload session has expired or is invalid. Please scan a fresh QR code from the Kiosk screen.',
+    });
   }
 
   if (!file) {
-    return res.status(400).json({ error: 'ERR_NO_FILE_UPLOADED' });
+    return res.status(400).json({
+      error: 'ERR_NO_FILE_UPLOADED',
+      message: 'No document file selected. Please choose a clear photo of your PAN card.',
+    });
   }
 
   try {
