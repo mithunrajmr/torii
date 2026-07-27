@@ -47,7 +47,17 @@ import ToriiLogo from '../../components/ToriiLogo.jsx';
 import QRCodeGenerator from '../../components/QRCodeGenerator.jsx';
 import VoiceAssistant from '../../components/VoiceAssistant.jsx';
 
-// ── Quick-action suggestion chips ─────────────────────────────────────────────
+// ── Branch Services Quick Launcher Grid ─────────────────────────────────────────
+const BRANCH_SERVICES_GRID = [
+  { id: 'FULL_KYC', label: 'Full CKYC / Re-KYC', query: 'I want to complete my full CKYC verification', icon: '📋' },
+  { id: 'AADHAAR_LINK', label: 'Aadhaar & NPCI Link', query: 'Link my Aadhaar card for NPCI direct benefit transfer', icon: '🆔' },
+  { id: 'PAN_LINK', label: 'PAN Linking', query: 'I want to link my PAN card', icon: '📄' },
+  { id: 'ADDRESS_CHANGE', label: 'Address Change', query: 'I moved to a new flat and need to update my address', icon: '🏠' },
+  { id: 'NOMINEE_UPDATE', label: 'Nominee Update', query: 'How do I add a nominee to my bank account?', icon: '👨‍👩‍👧' },
+  { id: 'ACCOUNT_UPGRADE', label: 'Upgrade & Cards', query: 'Request new debit card and chequebook delivery', icon: '💳' },
+  { id: 'HIGH_VALUE_CLEARANCE', label: 'High-Value Clearance', query: 'High value transaction pre-clearance with invoice', icon: '💸' },
+];
+
 const QUICK_ACTIONS = [
   { label: 'FD interest rates',     query: 'What is the current FD interest rate?' },
   { label: 'Block lost card',       query: 'How do I block my lost debit card?' },

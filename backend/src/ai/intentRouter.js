@@ -148,7 +148,85 @@ function localFallbackRoute(text, accountContext) {
     };
   }
 
-  // 2. Explicit FAQ — general banking questions (interest rates, branch hours, FD, loans, limits, etc.)
+  // 2a. Service Intent Routing — Address Change
+  if (/address|moved|flat|house|street|city|pincode/i.test(t)) {
+    return {
+      intent: 'ADDRESS_CHANGE',
+      downstream: 'service_handoff',
+      serviceType: 'ADDRESS_CHANGE',
+      confidence: 0.85,
+      voiceResponse: 'I can help you update your residential address. Please scan the QR code to upload your address proof document.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2b. Service Intent Routing — Nominee Update
+  if (/nominee|beneficiary|guardian|inherit/i.test(t)) {
+    return {
+      intent: 'NOMINEE_UPDATE',
+      downstream: 'service_handoff',
+      serviceType: 'NOMINEE_UPDATE',
+      confidence: 0.85,
+      voiceResponse: 'I can assist you with adding or modifying your account nominee. Scan the QR code to complete the nomination details.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2c. Service Intent Routing — Aadhaar Linking
+  if (/aadhaar|uidai|dbt|npci/i.test(t)) {
+    return {
+      intent: 'AADHAAR_LINK',
+      downstream: 'service_handoff',
+      serviceType: 'AADHAAR_LINK',
+      confidence: 0.85,
+      voiceResponse: 'I can help link your Aadhaar card for Direct Benefit Transfer. Scan the QR code to submit your Aadhaar card.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2d. Service Intent Routing — Full CKYC / Re-KYC
+  if (/full kyc|ckyc|re-kyc|rekyc|complete kyc/i.test(t)) {
+    return {
+      intent: 'FULL_KYC',
+      downstream: 'service_handoff',
+      serviceType: 'FULL_KYC',
+      confidence: 0.90,
+      voiceResponse: 'Let us complete your full CKYC verification. Scan the QR code with your smartphone to fill the application form and upload your ID documents.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2e. Service Intent Routing — Account Upgrade / Cards / Chequebook
+  if (/upgrade|debit card|chequebook|cheque book/i.test(t)) {
+    return {
+      intent: 'ACCOUNT_UPGRADE',
+      downstream: 'service_handoff',
+      serviceType: 'ACCOUNT_UPGRADE',
+      confidence: 0.85,
+      voiceResponse: 'I can help you upgrade your account tier and request a new debit card or chequebook. Scan the QR code to proceed.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2f. Service Intent Routing — High-Value Pre-Clearance
+  if (/high value|invoice|large transaction|pre-clearance/i.test(t)) {
+    return {
+      intent: 'HIGH_VALUE_CLEARANCE',
+      downstream: 'service_handoff',
+      serviceType: 'HIGH_VALUE_CLEARANCE',
+      confidence: 0.85,
+      voiceResponse: 'For high-value transaction pre-clearance, please scan the QR code to declare your source of funds and attach invoice documentation.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 3. Explicit FAQ — general banking questions (interest rates, branch hours, FD, loans, limits, etc.)
   if (
     /what|how|when|where|why|interest|rate|fee|charge|limit|loan|fd|fixed deposit|saving|current|neft|rtgs|upi|atm|card|block|ifsc|branch|hours|open|close|minimum|balance/i.test(t)
   ) {
@@ -162,6 +240,84 @@ function localFallbackRoute(text, accountContext) {
     };
   }
 
+  // 2b. Service Intent Routing — Address Change
+  if (/address|moved|flat|house|street|city|pincode/i.test(t)) {
+    return {
+      intent: 'ADDRESS_CHANGE',
+      downstream: 'service_handoff',
+      serviceType: 'ADDRESS_CHANGE',
+      confidence: 0.85,
+      voiceResponse: 'I can help you update your residential address. Please scan the QR code to upload your address proof document.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2c. Service Intent Routing — Nominee Update
+  if (/nominee|beneficiary|guardian|inherit/i.test(t)) {
+    return {
+      intent: 'NOMINEE_UPDATE',
+      downstream: 'service_handoff',
+      serviceType: 'NOMINEE_UPDATE',
+      confidence: 0.85,
+      voiceResponse: 'I can assist you with adding or modifying your account nominee. Scan the QR code to complete the nomination details.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2d. Service Intent Routing — Aadhaar Linking
+  if (/aadhaar|uidai|dbt|npci/i.test(t)) {
+    return {
+      intent: 'AADHAAR_LINK',
+      downstream: 'service_handoff',
+      serviceType: 'AADHAAR_LINK',
+      confidence: 0.85,
+      voiceResponse: 'I can help link your Aadhaar card for Direct Benefit Transfer. Scan the QR code to submit your Aadhaar card.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2e. Service Intent Routing — Full CKYC / Re-KYC
+  if (/full kyc|ckyc|re-kyc|rekyc|complete kyc/i.test(t)) {
+    return {
+      intent: 'FULL_KYC',
+      downstream: 'service_handoff',
+      serviceType: 'FULL_KYC',
+      confidence: 0.90,
+      voiceResponse: 'Let us complete your full CKYC verification. Scan the QR code with your smartphone to fill the application form and upload your ID documents.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2f. Service Intent Routing — Account Upgrade / Cards / Chequebook
+  if (/upgrade|debit card|chequebook|cheque book/i.test(t)) {
+    return {
+      intent: 'ACCOUNT_UPGRADE',
+      downstream: 'service_handoff',
+      serviceType: 'ACCOUNT_UPGRADE',
+      confidence: 0.85,
+      voiceResponse: 'I can help you upgrade your account tier and request a new debit card or chequebook. Scan the QR code to proceed.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
+  // 2g. Service Intent Routing — High-Value Pre-Clearance
+  if (/high value|invoice|large transaction|pre-clearance/i.test(t)) {
+    return {
+      intent: 'HIGH_VALUE_CLEARANCE',
+      downstream: 'service_handoff',
+      serviceType: 'HIGH_VALUE_CLEARANCE',
+      confidence: 0.85,
+      voiceResponse: 'For high-value transaction pre-clearance, please scan the QR code to declare your source of funds and attach invoice documentation.',
+      showQR: true,
+      contextOverride: false,
+    };
+  }
+
   // 3. PAN / KYC missing — explicit request OR account status error query
   if (
     /pan|kyc|document|upload|link|50.?000|50k|verify identity/i.test(t) ||
@@ -170,6 +326,7 @@ function localFallbackRoute(text, accountContext) {
     return {
       intent: 'PAN_MISSING',
       downstream: 'mobile_handoff',
+      serviceType: 'PAN_LINK',
       confidence: 0.75,
       voiceResponse:
         'It looks like we need your PAN card to proceed. ' +

@@ -12,6 +12,7 @@
 //   WXO_ADVISOR_AGENT_ID   — Orchestrate agent ID for Cross-Sell Advisor
 
 import { processVisionOCR } from './visionAgent.js';
+import { evaluateEntityMatch } from './entityMatcherAgent.js';
 import { chatWithAgentJSON } from './orchestrateClient.js';
 import { query } from '../db/index.js';
 import { getAgentConfig } from '../services/configService.js';
@@ -427,10 +428,24 @@ export async function executeParallelSwarm(accountId, fileBuffer, mimeType, opts
     console.warn('[swarmOrchestrator] Telemetry batch failed silently:', err.message);
   });
 
+  // Cross-document & account record entity verification
+  let entityVerification = null;
+  try {
+    const accRows = await query`SELECT full_name FROM accounts WHERE id = ${accountId} LIMIT 1`.catch(() => []);
+    const regName = accRows[0]?.full_name || '';
+    entityVerification = evaluateEntityMatch({
+      registeredName: regName,
+      documents: [ocrResult],
+    });
+  } catch (_) {
+    entityVerification = { overallScore: 1.0, isMatch: true, mismatchFlags: [] };
+  }
+
   return {
     ocr:      ocrResult,
     watchdog: watchdogResult,
     advisor:  advisorResult,
+    entityVerification,
     _meta: {
       clarity_threshold:      visionCfg.clarity_threshold      ?? 0.80,
       name_match_hard_reject:  visionCfg.name_match_hard_reject ?? 0.50,

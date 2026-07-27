@@ -126,6 +126,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/mobile', mobileRoutes);
 app.use('/api/teller', tellerRoutes);
 app.use('/api/kiosk', kioskRoutes);
+app.use('/api/services', serviceRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/debug', debugRoutes);
 

@@ -1,12 +1,18 @@
-// frontend/src/pages/mobile/DocumentUpload.jsx
 import React, { useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, Upload, AlertCircle, RefreshCw, ShieldCheck, CheckCircle } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
+import DynamicServiceForm from './DynamicServiceForm.jsx';
 
 export default function DocumentUpload() {
   const { token } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const serviceType = searchParams.get('service_type');
+
+  if (serviceType) {
+    return <DynamicServiceForm token={token} serviceType={serviceType} />;
+  }
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);

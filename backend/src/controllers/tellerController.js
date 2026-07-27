@@ -178,18 +178,75 @@ export async function handleTellerAction(req, res) {
 
     if (action === 'APPROVE') {
       const ocr = typeof ticket.ocr_data === 'string' ? (JSON.parse(ticket.ocr_data) || {}) : (ticket.ocr_data || {});
+      const serviceType = ocr.service_type || 'PAN_LINK';
       const panNumber = ocr.pan_number || ocr.id_number || 'BNZPM2501F';
 
+      // 1. Core PAN mutation
       await query`
         UPDATE accounts SET pan_linked = true, pan_number = ${panNumber}
         WHERE id = ${ticket.account_id}
       `;
+
+      // 2. Service-specific fulfillment mutations
+      if (serviceType === 'ADDRESS_CHANGE' || ocr.address_line1) {
+        await query`
+          UPDATE accounts SET
+            address_line1 = COALESCE(${ocr.address_line1 || null}, address_line1),
+            address_line2 = COALESCE(${ocr.address_line2 || null}, address_line2),
+            city          = COALESCE(${ocr.city || null}, city),
+            state         = COALESCE(${ocr.state || null}, state),
+            pincode       = COALESCE(${ocr.pincode || null}, pincode)
+          WHERE id = ${ticket.account_id}
+        `.catch((e) => console.warn('[tellerController] address update warning:', e.message));
+      }
+
+      if (serviceType === 'NOMINEE_UPDATE' || ocr.nominee_name) {
+        const nomineeObj = {
+          name: ocr.nominee_name || null,
+          relationship: ocr.relationship || null,
+          dob: ocr.nominee_dob || null,
+          is_minor: Boolean(ocr.is_minor),
+          guardian_name: ocr.guardian_name || null,
+          updated_at: new Date().toISOString(),
+        };
+        await query`
+          UPDATE accounts SET nominee_details = ${JSON.stringify(nomineeObj)}
+          WHERE id = ${ticket.account_id}
+        `.catch((e) => console.warn('[tellerController] nominee update warning:', e.message));
+      }
+
+      if (serviceType === 'AADHAAR_LINK' || ocr.aadhaar_number) {
+        await query`
+          UPDATE accounts SET
+            aadhaar_linked = true,
+            aadhaar_number = COALESCE(${ocr.aadhaar_number || null}, aadhaar_number)
+          WHERE id = ${ticket.account_id}
+        `.catch((e) => console.warn('[tellerController] aadhaar update warning:', e.message));
+      }
+
+      if (serviceType === 'FULL_KYC') {
+        await query`
+          UPDATE accounts SET
+            pan_linked = true,
+            aadhaar_linked = true,
+            kyc_status = 'VERIFIED'
+          WHERE id = ${ticket.account_id}
+        `.catch((e) => console.warn('[tellerController] full kyc update warning:', e.message));
+      }
+
+      // 3. Sync status to teller_tickets & service_requests tables
       await query`
         UPDATE teller_tickets SET status = 'APPROVED', reviewed_by = ${tellerId}
         WHERE id = ${ticket_id}
       `;
+      if (ticket.session_id) {
+        await query`
+          UPDATE service_requests SET status = 'APPROVED', reviewed_by = ${tellerId}
+          WHERE session_id = ${ticket.session_id}
+        `.catch(() => {});
+      }
 
-      res.status(200).json({ status: 'APPROVED', ticket_id });
+      res.status(200).json({ status: 'APPROVED', ticket_id, service_type: serviceType });
 
       // Fire-and-forget: email + audit + feedback loop
       notifyCustomerTicketStatus(ticket.account_id, 'APPROVED');

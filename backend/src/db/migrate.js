@@ -38,6 +38,7 @@ async function run() {
       '003_agent_architecture.sql',
       '004_faq_feedback_loop.sql',
       '005_accounts_created_at.sql',
+      '006_expanded_branch_services.sql',
     ];
 
     const migrationsDir = path.join(process.cwd(), 'backend', 'src', 'db', 'migrations');
