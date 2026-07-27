@@ -42,7 +42,17 @@ export default function CopilotDrawer({ onClose }) {
     if (!text || sending) return;
 
     const userMsg = { id: `u-${Date.now()}`, role: 'user', text, chip: null };
-    setMessages((prev) => [...prev, userMsg]);
+    const replyId = `a-${Date.now()}`;
+    const initialReply = {
+      id: replyId,
+      role: 'assistant',
+      text: '',
+      streaming: true,
+      chip: null,
+      secondary: [],
+    };
+
+    setMessages((prev) => [...prev, userMsg, initialReply]);
     setInput('');
     setSending(true);
 
@@ -53,40 +63,90 @@ export default function CopilotDrawer({ onClose }) {
         headers['x-kiosk-jwt'] = jwt;
       }
 
-      const res = await fetch('/api/kiosk/voice', {
+      const streamUrl = jwt ? '/api/kiosk/stream' : '/api/kiosk/public-stream';
+      const res = await fetch(streamUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ query: text, text }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      if (data.authenticated && data.accountContext) {
-        setAccountInfo(data.accountContext);
+      if (!res.ok || !res.body || !res.headers.get('content-type')?.includes('text/event-stream')) {
+        // Fallback to /api/kiosk/voice if streaming not supported
+        const fallbackRes = await fetch('/api/kiosk/voice', { method: 'POST', headers, body: JSON.stringify({ text }) });
+        const data = await fallbackRes.json();
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === replyId
+              ? {
+                  ...m,
+                  text: data.response || data.text || 'I can help with that.',
+                  chip: data.actionChip || null,
+                  secondary: data.secondaryActions || [],
+                  streaming: false,
+                }
+              : m
+          )
+        );
+        return;
       }
 
-      const chip = data.actionChip ?? null;
-      const secondary = data.secondaryActions ?? [];
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = '';
 
-      const reply = {
-        id: `a-${Date.now()}`,
-        role: 'assistant',
-        text: data.response ?? data.text ?? 'I\'ll help you with that.',
-        chip,
-        secondary,
-        accountContext: data.accountContext ?? null,
-        authenticated: data.authenticated ?? Boolean(jwt),
-      };
-      setMessages((prev) => [...prev, reply]);
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line || !line.startsWith('data:')) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.token) {
+              accumulatedText += payload.token;
+              setMessages((prev) =>
+                prev.map((m) => (m.id === replyId ? { ...m, text: accumulatedText, streaming: true } : m))
+              );
+            }
+            if (payload.fullText) {
+              accumulatedText = payload.fullText;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === replyId
+                    ? {
+                        ...m,
+                        text: accumulatedText,
+                        streaming: false,
+                        chip: payload.showQR
+                          ? { label: '⚡ Execute Agentic Fix', route: '/kiosk/triage?action=fix_pan' }
+                          : { label: 'Go to Kiosk Triage', route: '/kiosk' },
+                      }
+                    : m
+                )
+              );
+            }
+          } catch (_) {}
+        }
+      }
+
+      setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, streaming: false } : m)));
     } catch {
-      const fallback = {
-        id: `a-err-${Date.now()}`,
-        role: 'assistant',
-        text: 'Sorry, I\'m having trouble connecting right now. Try the kiosk directly to get started.',
-        chip: { label: 'Open Kiosk Triage', route: '/kiosk' },
-      };
-      setMessages((prev) => [...prev, fallback]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === replyId
+            ? {
+                ...m,
+                text: "Sorry, I'm having trouble connecting right now. Try the kiosk directly to get started.",
+                chip: { label: 'Open Kiosk Triage', route: '/kiosk' },
+                streaming: false,
+              }
+            : m
+        )
+      );
     } finally {
       setSending(false);
     }

@@ -14,7 +14,7 @@
 // with a 10-minute TTL, matching the QR token window.
 
 import crypto from 'crypto';
-import { consumeQRToken } from '../cache/sessionManager.js';
+import { getQRToken, consumeQRToken } from '../cache/sessionManager.js';
 import { set as redisSet, get as redisGet, incrWithExpiry } from '../cache/redisClient.js';
 import { uploadDocument } from '../services/storageService.js';
 import { executeParallelSwarm } from '../ai/swarmOrchestrator.js';
@@ -55,8 +55,8 @@ export async function uploadMobileDocument(req, res) {
   }
 
   const sessionId = deriveSessionId(qr_token);
-  // Consume the single-use QR token upfront — returns accountId or null.
-  const accountId = await consumeQRToken(qr_token);
+  // Read accountId bound to QR token (do NOT delete yet so retries on RETAKE_IMAGE work)
+  const accountId = await getQRToken(qr_token);
   if (!accountId) {
     return res.status(401).json({ error: 'ERR_INVALID_OR_EXPIRED_QR_TOKEN' });
   }

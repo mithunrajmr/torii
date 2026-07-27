@@ -31,6 +31,17 @@ import {
   Check,
   Clock,
   Zap,
+  ChevronLeft,
+  Sparkles,
+  Gift,
+  ArrowRight,
+  CreditCard,
+  TrendingUp,
+  Percent,
+  ShieldCheck,
+  Minus,
+  X,
+  Maximize2,
 } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
 import QRCodeGenerator from '../../components/QRCodeGenerator.jsx';
@@ -66,12 +77,13 @@ export default function KioskTriage() {
   const accountStatus = location.state?.accountStatus || null;
 
   // Retrieve instant login swarm results (Watchdog AML, Compliance, Advisor Cross-Sell Ad)
-  const loginSwarm = location.state?.loginSwarm || (() => {
+  const rawLoginSwarm = location.state?.loginSwarm || (() => {
     try {
       const saved = sessionStorage.getItem('login_swarm');
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   })();
+  const loginSwarm = Array.isArray(rawLoginSwarm) ? rawLoginSwarm[0] : rawLoginSwarm;
 
   // If no JWT present, auto-authenticate in dev mode
   const [devBooting, setDevBooting] = useState(!jwt);
@@ -98,6 +110,12 @@ export default function KioskTriage() {
     if (jwt) setDevBooting(false);
   }, [jwt]);
 
+  useEffect(() => {
+    if (location.state?.loginSwarm) {
+      sessionStorage.setItem('login_swarm', JSON.stringify(location.state.loginSwarm));
+    }
+  }, [location.state?.loginSwarm]);
+
   if (devBooting) {
     return (
       <div className="min-h-screen bg-[#e8ecf2] flex flex-col items-center justify-center gap-4">
@@ -121,14 +139,66 @@ export default function KioskTriage() {
   const [promptDismissed,  setPromptDismissed]  = useState(false);
   const [isListening,      setIsListening]      = useState(false);  // mic active
   const [micSupported,     setMicSupported]     = useState(false);  // browser support flag
-  const [currentTime,      setCurrentTime]      = useState(() => new Date().toLocaleTimeString('en-GB'));
+  const [currentTime,      setCurrentTime]      = useState(() =>
+    new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString('en-GB'));
+      setCurrentTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // ── Offers Carousel & Floating Side Ad Widget State ───────────────────────
+  const [activeOfferIndex, setActiveOfferIndex] = useState(0);
+  const [claimedOffer,     setClaimedOffer]     = useState(null); // claim modal popup
+  const [adState,          setAdState]          = useState('EXPANDED'); // 'EXPANDED' | 'MINIMIZED' | 'DISMISSED'
+
+  const offerList = React.useMemo(() => {
+    if (loginSwarm?.advisor?.offers && Array.isArray(loginSwarm.advisor.offers)) {
+      return loginSwarm.advisor.offers;
+    }
+    if (loginSwarm?.advisor && loginSwarm.advisor.title) {
+      return [loginSwarm.advisor];
+    }
+    return [
+      {
+        id: 'offer-1',
+        badge: '🔥 8.40% SPECIAL ROI',
+        title: 'Torii Premier Fixed Deposit',
+        offer: 'Lock in guaranteed 8.40% returns with quarterly interest payouts & 24/7 liquid withdrawals.',
+        cta: 'Lock In Rate Now',
+        type: 'FD'
+      },
+      {
+        id: 'offer-2',
+        badge: '💳 0 JOINING FEE',
+        title: 'Torii Rewards Metal Credit Card',
+        offer: 'Pre-approved ₹5,00,000 credit limit with ₹2,500 cashback welcome voucher & airport lounge access.',
+        cta: 'Claim Card Now',
+        type: 'CREDIT'
+      },
+      {
+        id: 'offer-3',
+        badge: '📈 AUTOMATED WEALTH',
+        title: 'Smart SIP Mutual Fund Plan',
+        offer: 'Build wealth systematically with automated monthly investments starting @ ₹500/month.',
+        cta: 'Start Smart SIP',
+        type: 'SIP'
+      }
+    ];
+  }, [loginSwarm]);
+
+  // Reset index & auto-rotate offers every 6 seconds
+  useEffect(() => {
+    setActiveOfferIndex(0);
+    if (!offerList || offerList.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveOfferIndex((prev) => (prev + 1) % offerList.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [offerList]);
 
   const inputRef         = useRef(null);
   const recognitionRef   = useRef(null);
@@ -273,11 +343,11 @@ export default function KioskTriage() {
     if (!q || isLoading) return;
 
     setIsLoading(true);
-    setAnswer(null);
+    setAnswer({ text: '', intent: 'FAQ_QUERY', showQR: false, streaming: true });
     setTtsText(null);
 
     try {
-      const res = await fetch('/api/kiosk/query', {
+      const res = await fetch('/api/kiosk/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -288,23 +358,58 @@ export default function KioskTriage() {
 
       if (res.status === 401) { resetKiosk('SESSION_EXPIRED'); return; }
 
-      const data = await res.json();
+      if (!res.body || !res.headers.get('content-type')?.includes('text/event-stream')) {
+        const data = await res.json();
+        const text = data.faqAnswer || data.voiceResponse || 'A teller at the counter will be happy to help you.';
+        setAnswer({ text, intent: data.intent, showQR: data.showQR, streaming: false });
+        if (data.showQR && !deepLink) fetchQRCode();
+        return;
+      }
 
-      if (data.showQR && !deepLink) fetchQRCode();
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedText = '';
 
-      const answerText =
-        data.faqAnswer || data.voiceResponse || 'A teller at the counter will be happy to help you.';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      setAnswer({ text: answerText, intent: data.intent, showQR: data.showQR });
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
 
-      // Trigger TTS — VoiceAssistant speaks the answer aloud
-      setTtsText(answerText);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
 
+          if (line.startsWith('data:')) {
+            try {
+              const payload = JSON.parse(line.slice(5).trim());
+              if (payload.token) {
+                accumulatedText += payload.token;
+                setAnswer((prev) => ({
+                  ...prev,
+                  text: accumulatedText,
+                  streaming: true,
+                }));
+              }
+              if (payload.fullText) {
+                accumulatedText = payload.fullText;
+                setAnswer({
+                  text: accumulatedText,
+                  intent: payload.intent || 'FAQ_QUERY',
+                  showQR: Boolean(payload.showQR),
+                  streaming: false,
+                });
+                if (payload.showQR && !deepLink) fetchQRCode();
+              }
+            } catch (_) {}
+          }
+        }
+      }
     } catch (err) {
       console.error('[KioskTriage] Query error:', err);
       const fallback = "Sorry, I'm having trouble right now. Please speak with a teller.";
-      setAnswer({ text: fallback, intent: 'GENERAL_TRIAGE', showQR: false });
-      setTtsText(fallback);
+      setAnswer({ text: fallback, intent: 'GENERAL_TRIAGE', showQR: false, streaming: false });
     } finally {
       setIsLoading(false);
       setInputText('');
@@ -420,17 +525,67 @@ export default function KioskTriage() {
           </div>
         )}
 
-        {/* ── Instant Advisor Cross-Sell Offer Banner (Triggered Instantly on Login) ────── */}
-        {loginSwarm?.advisor && (
-          <div className="neo-card p-5 border-l-4 border-blue-500 bg-blue-50/70 space-y-2 shadow-sm transition-all">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200">
-                ⭐ Instant Personalised Bank Offer ({loginSwarm.advisor.type || 'FD'})
-              </span>
-              <span className="text-[11px] text-slate-500 font-mono">Live Agent: Advisor</span>
+
+
+        {/* Interactive Offer Claim Modal */}
+        {claimedOffer && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="neo-card p-6 max-w-md w-full bg-white space-y-4 shadow-2xl rounded-3xl border border-blue-100">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2 text-blue-600">
+                  <Gift className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Exclusive Product Reservation</span>
+                </div>
+                <button
+                  onClick={() => setClaimedOffer(null)}
+                  className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
+                  {claimedOffer.badge}
+                </span>
+                <h3 className="text-lg font-bold text-slate-800 mt-2">{claimedOffer.title}</h3>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">{claimedOffer.offer}</p>
+              </div>
+
+              <div className="neo-inset p-3 rounded-2xl text-xs space-y-1.5 text-slate-600 bg-slate-50 border border-slate-200">
+                <div className="flex justify-between">
+                  <span className="font-medium">Product Category:</span>
+                  <span className="font-bold text-slate-800">{claimedOffer.type || 'Banking Service'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Eligibility Status:</span>
+                  <span className="font-bold text-emerald-600">✓ Pre-Approved (Instant Lock)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Relationship Manager:</span>
+                  <span className="font-bold text-slate-800">Assigned upon claim</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setClaimedOffer(null)}
+                  className="w-1/2 py-3 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    alert(`Congratulations! Your interest for "${claimedOffer.title}" has been registered. Your Relationship Manager will contact you shortly.`);
+                    setClaimedOffer(null);
+                  }}
+                  className="w-1/2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Confirm Interest</span>
+                </button>
+              </div>
             </div>
-            <h4 className="text-sm font-bold text-slate-800">{loginSwarm.advisor.title}</h4>
-            <p className="text-xs text-slate-600 leading-relaxed">{loginSwarm.advisor.offer}</p>
           </div>
         )}
 
@@ -512,15 +667,20 @@ export default function KioskTriage() {
           <div className="neo-inset rounded-xl p-4 min-h-[100px] flex items-start gap-3">
             <MessageCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              {isLoading ? (
+              {isLoading && (!answer || !answer.text) ? (
                 <div className="flex items-center gap-2 text-slate-500">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Looking that up for you…</span>
+                  <span className="text-sm font-medium">Connecting to TORII AI…</span>
                 </div>
               ) : answer ? (
                 <div>
-                  <p className="text-sm text-slate-700 leading-relaxed">{answer.text}</p>
-                  {answer.intent === 'GENERAL_TRIAGE' && (
+                  <p className="text-sm text-slate-700 leading-relaxed font-sans">
+                    {answer.text}
+                    {answer.streaming && (
+                      <span className="inline-block w-2 h-4 ml-1 bg-blue-600 animate-pulse rounded-sm align-middle" />
+                    )}
+                  </p>
+                  {answer.intent === 'GENERAL_TRIAGE' && !answer.streaming && (
                     <p className="text-xs text-slate-400 mt-2">
                       → Please proceed to the teller counter for assistance.
                     </p>
@@ -628,6 +788,106 @@ export default function KioskTriage() {
           onEnd={() => setTtsText(null)}
         />
       )}
+
+      {/* ── Professional Corner Offer Toast (TORII App Theme Matched) ───────────────── */}
+      {offerList.length > 0 && adState !== 'DISMISSED' && (() => {
+        const safeIndex = activeOfferIndex % offerList.length;
+        const currentOffer = offerList[safeIndex] || offerList[0] || {};
+
+        return (
+          <div
+            key={safeIndex}
+            className="fixed bottom-6 right-6 z-40 w-84 sm:w-96 animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto"
+          >
+            <div className="neo-card p-4 border-l-4 border-blue-600 bg-white space-y-3 shadow-2xl rounded-2xl border border-slate-200/80 relative overflow-hidden">
+              {/* Row 1: Header (Simple Title Label & Counter/Nav Controls) */}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-1.5 text-blue-600 font-bold text-xs">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="uppercase tracking-wider text-[11px] text-slate-700 font-extrabold">Recommended for You</span>
+                </div>
+
+                <div className="flex items-center space-x-1">
+                  <span className="text-[11px] font-mono text-slate-400 mr-1.5 font-medium">
+                    {safeIndex + 1} of {offerList.length}
+                  </span>
+                  <button
+                    onClick={() => setActiveOfferIndex((prev) => (prev === 0 ? offerList.length - 1 : prev - 1))}
+                    className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Previous"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setActiveOfferIndex((prev) => (prev + 1) % offerList.length)}
+                    className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Next"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setAdState('DISMISSED')}
+                    className="p-1 text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Row 2: Main Body (Clean Product Icon + Title & Copy) */}
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shrink-0">
+                  {currentOffer.type === 'CREDIT' ? (
+                    <CreditCard className="w-4 h-4" />
+                  ) : currentOffer.type === 'WEALTH' || currentOffer.type === 'SIP' ? (
+                    <TrendingUp className="w-4 h-4" />
+                  ) : currentOffer.type === 'INSURANCE' ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <Percent className="w-4 h-4" />
+                  )}
+                </div>
+
+                <div className="space-y-0.5 pr-1">
+                  <h4 className="text-xs font-bold text-slate-900 leading-snug">
+                    {currentOffer.title}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {currentOffer.offer}
+                  </p>
+                </div>
+              </div>
+
+              {/* Row 3: Footer (Progress Dots & TORII Theme Claim Button) */}
+              <div className="flex items-center justify-between pt-1">
+                {/* Dot Indicators */}
+                <div className="flex items-center space-x-1.5">
+                  {offerList.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveOfferIndex(idx)}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                        safeIndex === idx ? 'w-4 bg-blue-600' : 'w-1.5 bg-slate-200 hover:bg-slate-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Claim CTA */}
+                <button
+                  onClick={() => setClaimedOffer(currentOffer)}
+                  className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold uppercase tracking-wider rounded-xl flex items-center gap-1 shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
+                >
+                  <span>{currentOffer.cta || 'Claim Offer'}</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
 
     </div>
   );

@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [staffName, setStaffName] = useState(localStorage.getItem('teller_name') || 'Staff Teller');
+  const [filterMode, setFilterMode] = useState('pending'); // 'pending' | 'all'
 
   // Auth guard — redirect to login if no valid JWT
   useEffect(() => {
@@ -76,19 +77,23 @@ export default function Dashboard() {
     });
   }, [navigate]);
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (overrideFilter = filterMode) => {
     try {
-      const res = await tellerFetch('/api/teller/tickets');
+      const endpoint = overrideFilter === 'all' ? '/api/teller/tickets?status=all' : '/api/teller/tickets';
+      const res = await tellerFetch(endpoint);
       if (res.status === 401) { navigate('/teller/login', { replace: true }); return; }
       if (!res.ok) return;
       const data = await res.json();
       setTickets(data);
-      if (!selectedTicket && data.length > 0) {
+
+      if (data.length === 0) {
+        setSelectedTicket(null);
+      } else if (!selectedTicket) {
         setSelectedTicket(data[0]);
-      } else if (selectedTicket) {
-        // Keep selection updated
+      } else {
+        // Keep selection updated if still pending, otherwise switch to next ticket in queue
         const current = data.find((t) => t.id === selectedTicket.id);
-        if (current) setSelectedTicket(current);
+        setSelectedTicket(current || data[0]);
       }
     } catch (err) {
       console.warn('Failed to fetch teller tickets:', err);
@@ -98,13 +103,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    fetchTickets();
-    const interval = setInterval(fetchTickets, 5000);
+    fetchTickets(filterMode);
+    const interval = setInterval(() => fetchTickets(filterMode), 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [filterMode]);
 
   const handleApprove = async () => {
     if (!selectedTicket || actionLoading) return;
+    const actionedId = selectedTicket.id;
     setActionLoading(true);
     setFeedback(null);
 
@@ -113,7 +119,7 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticket_id: selectedTicket.id,
+          ticket_id: actionedId,
           action: 'APPROVE',
         }),
       });
@@ -124,7 +130,13 @@ export default function Dashboard() {
         return;
       }
 
-      setFeedback({ type: 'success', message: `Ticket #${selectedTicket.id.slice(0, 8)} Approved!` });
+      setFeedback({ type: 'success', message: `Ticket #${actionedId.slice(0, 8)} Approved!` });
+
+      // Immediately remove actioned ticket from UI queue
+      const remaining = tickets.filter((t) => t.id !== actionedId);
+      setTickets(remaining);
+      setSelectedTicket(remaining.length > 0 ? remaining[0] : null);
+
       fetchTickets();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Connection error' });
@@ -135,6 +147,7 @@ export default function Dashboard() {
 
   const handleReject = async (reason) => {
     if (!selectedTicket || actionLoading) return;
+    const actionedId = selectedTicket.id;
     setActionLoading(true);
     setFeedback(null);
 
@@ -143,7 +156,7 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticket_id: selectedTicket.id,
+          ticket_id: actionedId,
           action: 'REJECT',
           reason,
         }),
@@ -155,7 +168,13 @@ export default function Dashboard() {
         return;
       }
 
-      setFeedback({ type: 'success', message: `Ticket #${selectedTicket.id.slice(0, 8)} Rejected.` });
+      setFeedback({ type: 'success', message: `Ticket #${actionedId.slice(0, 8)} Rejected.` });
+
+      // Immediately remove actioned ticket from UI queue
+      const remaining = tickets.filter((t) => t.id !== actionedId);
+      setTickets(remaining);
+      setSelectedTicket(remaining.length > 0 ? remaining[0] : null);
+
       fetchTickets();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Connection error' });
@@ -166,6 +185,7 @@ export default function Dashboard() {
 
   const handleEscalate = async () => {
     if (!selectedTicket || actionLoading) return;
+    const actionedId = selectedTicket.id;
     setActionLoading(true);
     setFeedback(null);
 
@@ -174,7 +194,7 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticket_id: selectedTicket.id,
+          ticket_id: actionedId,
           action: 'ESCALATE',
         }),
       });
@@ -185,7 +205,13 @@ export default function Dashboard() {
         return;
       }
 
-      setFeedback({ type: 'success', message: `Ticket #${selectedTicket.id.slice(0, 8)} escalated to Compliance.` });
+      setFeedback({ type: 'success', message: `Ticket #${actionedId.slice(0, 8)} escalated to Compliance.` });
+
+      // Immediately remove actioned ticket from UI queue
+      const remaining = tickets.filter((t) => t.id !== actionedId);
+      setTickets(remaining);
+      setSelectedTicket(remaining.length > 0 ? remaining[0] : null);
+
       fetchTickets();
     } catch (err) {
       setFeedback({ type: 'error', message: 'Connection error' });
@@ -256,6 +282,11 @@ export default function Dashboard() {
             selectedTicket={selectedTicket}
             onSelectTicket={setSelectedTicket}
             loading={loading}
+            filterMode={filterMode}
+            onFilterChange={(newMode) => {
+              setFilterMode(newMode);
+              fetchTickets(newMode);
+            }}
           />
         </div>
 
@@ -300,56 +331,64 @@ export default function Dashboard() {
                   </div>
 
                   {/* AI Extraction Bento Table */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gemini Vision OCR Verification Output</h4>
-                    
-                    <div className="neo-inset p-4 rounded-2xl space-y-2 text-xs">
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Extracted Name:</span>
-                        <span className="font-bold text-slate-800">{selectedTicket.ocr_data?.name || 'UNKNOWN'}</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Extracted PAN:</span>
-                        <span className="font-mono font-bold text-blue-600">{selectedTicket.ocr_data?.pan_number || selectedTicket.ocr_data?.id_number || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Doc Type / DOB:</span>
-                        <span className="font-bold text-slate-700">
-                          {selectedTicket.ocr_data?.id_type || 'PAN'} · {selectedTicket.ocr_data?.dob || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Clarity / Confidence:</span>
-                        <span className="font-bold text-emerald-600">
-                          {selectedTicket.ocr_data?.clarity_score ? `${(selectedTicket.ocr_data.clarity_score * 100).toFixed(0)}%` : selectedTicket.ai_confidence ? `${(selectedTicket.ai_confidence * 100).toFixed(0)}%` : 'N/A'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Name Match Score:</span>
-                        <span className="font-bold text-slate-800">
-                          {selectedTicket.name_mismatch_score ? `${(selectedTicket.name_mismatch_score * 100).toFixed(0)}%` : '100%'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Tampering / Defacement:</span>
-                        <span className={`font-bold ${selectedTicket.ocr_data?.tampering_detected ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {selectedTicket.ocr_data?.tampering_detected ? '⚠️ DETECTED' : '✓ PASSED'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between py-1 border-b border-slate-300">
-                        <span className="text-slate-500 font-medium">Specimen Check:</span>
-                        <span className={`font-bold ${selectedTicket.ocr_data?.is_specimen_or_dummy ? 'text-red-600' : 'text-emerald-600'}`}>
-                          {selectedTicket.ocr_data?.is_specimen_or_dummy ? '⚠️ SPECIMEN / DUMMY' : '✓ GENUINE'}
-                        </span>
-                      </div>
-                      {selectedTicket.ocr_data?.rejection_reason && (
-                        <div className="flex justify-between py-1 text-red-600 bg-red-50 p-2 rounded-lg mt-1">
-                          <span className="font-bold">Rejection Flag:</span>
-                          <span className="font-semibold text-right">{selectedTicket.ocr_data.rejection_reason}</span>
+                  {(() => {
+                    const ocrData = typeof selectedTicket.ocr_data === 'string'
+                      ? (JSON.parse(selectedTicket.ocr_data) || {})
+                      : (selectedTicket.ocr_data || {});
+
+                    return (
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gemini Vision OCR Verification Output</h4>
+                        
+                        <div className="neo-inset p-4 rounded-2xl space-y-2 text-xs">
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Extracted Name:</span>
+                            <span className="font-bold text-slate-800">{ocrData.name || 'UNKNOWN'}</span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Extracted PAN:</span>
+                            <span className="font-mono font-bold text-blue-600">{ocrData.pan_number || ocrData.id_number || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Doc Type / DOB:</span>
+                            <span className="font-bold text-slate-700">
+                              {ocrData.id_type || 'PAN'} · {ocrData.dob || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Clarity / Confidence:</span>
+                            <span className="font-bold text-emerald-600">
+                              {ocrData.clarity_score ? `${(ocrData.clarity_score * 100).toFixed(0)}%` : selectedTicket.ai_confidence ? `${(selectedTicket.ai_confidence * 100).toFixed(0)}%` : 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Name Match Score:</span>
+                            <span className="font-bold text-slate-800">
+                              {selectedTicket.name_mismatch_score ? `${(selectedTicket.name_mismatch_score * 100).toFixed(0)}%` : '100%'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Tampering / Defacement:</span>
+                            <span className={`font-bold ${ocrData.tampering_detected ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {ocrData.tampering_detected ? '⚠️ DETECTED' : '✓ PASSED'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between py-1 border-b border-slate-300">
+                            <span className="text-slate-500 font-medium">Specimen Check:</span>
+                            <span className={`font-bold ${ocrData.is_specimen_or_dummy ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {ocrData.is_specimen_or_dummy ? '⚠️ SPECIMEN / DUMMY' : '✓ GENUINE'}
+                            </span>
+                          </div>
+                          {ocrData.rejection_reason && (
+                            <div className="flex justify-between py-1 text-red-600 bg-red-50 p-2 rounded-lg mt-1">
+                              <span className="font-bold">Rejection Flag:</span>
+                              <span className="font-semibold text-right">{ocrData.rejection_reason}</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()}
 
                 </div>
 
@@ -366,9 +405,16 @@ export default function Dashboard() {
 
             </div>
           ) : (
-            <div className="neo-card p-12 text-center text-slate-500 my-auto">
-              <p className="text-base font-semibold">No ticket selected from the queue.</p>
-              <p className="text-xs text-slate-400 mt-1">Select a ticket from the left panel to begin manual verification.</p>
+            <div className="neo-card p-12 flex flex-col items-center justify-center text-center space-y-4 my-auto min-h-[400px]">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+                <CheckCircle2 className="w-10 h-10" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800">Queue Clear!</h3>
+                <p className="text-xs text-slate-500 max-w-sm mt-1">
+                  All customer document verification tickets have been reviewed and processed. New tickets will automatically appear here in real time.
+                </p>
+              </div>
             </div>
           )}
 

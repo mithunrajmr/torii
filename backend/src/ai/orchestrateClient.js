@@ -99,8 +99,8 @@ function parseOrchestrateResponse(rawText) {
     try {
       const chunk = JSON.parse(payload);
       const choice = chunk.choices?.[0];
-      // Non-streaming final chunk uses message.content; streaming uses delta.content
-      const piece = choice?.message?.content ?? choice?.delta?.content ?? '';
+      // Streaming SSE chunks use delta.content; non-streaming chunks use message.content or text
+      const piece = choice?.delta ? (choice.delta.content ?? '') : (choice?.message?.content ?? choice?.text ?? '');
       if (piece) assembled += piece;
     } catch {
       // ignore malformed SSE lines
@@ -177,37 +177,51 @@ export async function chatWithAgent(agentId, userMsg, context = {}) {
 export async function chatWithAgentJSON(agentId, userMsg, fallback, context = {}) {
   try {
     const text = await chatWithAgent(agentId, userMsg, context);
+    console.log(`[orchestrateClient] Raw WXO Agent (${agentId}) Output:\n"${text}"`);
     if (!text || !text.trim()) return fallback;
 
     // 1. Strip markdown code fences if present (```json ... ```)
     const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    let candidate = fenceMatch ? fenceMatch[1].trim() : text.trim();
+    const targetText = fenceMatch ? fenceMatch[1].trim() : text.trim();
 
     // 2. Direct JSON.parse
     try {
-      return JSON.parse(candidate);
-    } catch (_) {
-      // 3. Extract JSON object or array using bracket matching
-      const startObj = candidate.indexOf('{');
-      const startArr = candidate.indexOf('[');
-      let startIdx = -1;
-      let endChar = '}';
+      return JSON.parse(targetText);
+    } catch (_) {}
 
-      if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
-        startIdx = startObj;
-        endChar = '}';
-      } else if (startArr !== -1) {
-        startIdx = startArr;
-        endChar = ']';
-      }
-
-      if (startIdx !== -1) {
-        const lastIdx = candidate.lastIndexOf(endChar);
-        if (lastIdx > startIdx) {
-          const sub = candidate.slice(startIdx, lastIdx + 1);
-          return JSON.parse(sub);
+    // 3. Extract single JSON array [ ... ] (handles concatenated duplicate arrays like [...][...])
+    const firstBracket = targetText.indexOf('[');
+    if (firstBracket !== -1) {
+      for (let i = firstBracket + 1; i <= targetText.length; i++) {
+        if (targetText[i - 1] === ']') {
+          try {
+            const parsed = JSON.parse(targetText.slice(firstBracket, i));
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } catch (_) {}
         }
       }
+    }
+
+    // 4. Extract single JSON object { ... } (handles concatenated duplicate objects like {...}{...})
+    const firstBrace = targetText.indexOf('{');
+    if (firstBrace !== -1) {
+      // Search forward for the earliest valid closing brace that forms valid JSON
+      for (let i = firstBrace + 1; i <= targetText.length; i++) {
+        if (targetText[i - 1] === '}') {
+          try {
+            return JSON.parse(targetText.slice(firstBrace, i));
+          } catch (_) {}
+        }
+      }
+    }
+
+    // 5. Greedy array bracket extraction
+    const firstArr = targetText.indexOf('[');
+    const lastArr = targetText.lastIndexOf(']');
+    if (firstArr !== -1 && lastArr > firstArr) {
+      try {
+        return JSON.parse(targetText.slice(firstArr, lastArr + 1));
+      } catch (_) {}
     }
 
     throw new Error(`No parseable JSON structure found in output`);

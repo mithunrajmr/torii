@@ -13,8 +13,33 @@
 //   WXO_FAQ_AGENT_ID — Orchestrate agent ID for the FAQ/QnA agent
 
 import { chatWithAgent } from './orchestrateClient.js';
+import { GoogleGenAI } from '@google/genai';
 
 const FAQ_AGENT_ID = process.env.WXO_FAQ_AGENT_ID || 'torii_faq_agent';
+
+/**
+ * Generate a dynamic banking answer using Google Gemini Flash AI when Watsonx is offline or un-matched.
+ */
+async function generateGeminiFaqAnswer(question) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        text: `You are TORII Autonomous Banking Copilot AI. Answer this bank kiosk customer's question clearly and helpfully in 2-3 concise sentences. Do not use markdown headers.\nQuestion: "${question}"\nAnswer:`
+      }],
+    });
+    const text = (response.text || '').trim();
+    console.log(`[faqAgent] Raw Gemini Flash FAQ Output:\n"${text}"`);
+    return text || null;
+  } catch (err) {
+    console.warn('[faqAgent] Gemini Flash AI FAQ fallback error:', err.message);
+    return null;
+  }
+}
 
 // ─── Static local FAQ KB (fallback when WXO agent is unavailable) ─────────────
 const LOCAL_FAQ = [
@@ -59,9 +84,15 @@ export async function askFaqAgent(question) {
     };
   }
 
-  // 1. Instant local KB lookup (< 5ms execution)
+  // 1. Instant local KB lookup (< 1ms execution)
   const localMatch = localFaqLookup(question);
 
+  // Fast-path: If local KB has a confident match (e.g. FD rates, timings, KYC, limits), return instantly!
+  if (localMatch.confident) {
+    return localMatch;
+  }
+
+  // 2. Unmatched / complex question — race WXO agent and Gemini Flash AI in PARALLEL
   const prompt =
     `Answer this customer's banking question at the kiosk.\n` +
     `Customer question: "${question}"\n\n` +
@@ -69,39 +100,33 @@ export async function askFaqAgent(question) {
     `and return ONLY the answer text — no JSON, no markdown, no labels.`;
 
   try {
-    // 2. Race WXO agent with a 2.5s timeout if a local match is available
-    const timeoutMs = localMatch.confident ? 2500 : 8000;
+    const wxoPromise = chatWithAgent(FAQ_AGENT_ID, prompt, null).catch(() => null);
+    const geminiPromise = generateGeminiFaqAnswer(question).catch(() => null);
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
 
-    const wxoPromise = chatWithAgent(FAQ_AGENT_ID, prompt, null);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('WXO_TIMEOUT')), timeoutMs)
-    );
+    // Race remote WXO and Gemini AI in parallel
+    const winner = await Promise.race([
+      wxoPromise.then((res) => (res && typeof res === 'string' && res.trim() ? res : null)),
+      geminiPromise.then((res) => (res && typeof res === 'string' && res.trim() ? res : null)),
+      timeoutPromise,
+    ]);
 
-    const answer = await Promise.race([wxoPromise, timeoutPromise]);
-
-    if (!answer || !answer.trim()) {
-      throw new Error('Empty response from FAQ agent');
+    const answerText = winner ? winner.trim() : null;
+    if (answerText && answerText.length > 5) {
+      const deflectedToTeller = /teller|counter|branch staff|speak with|visit the branch/i.test(answerText);
+      return {
+        answer:       answerText,
+        confident:    !deflectedToTeller,
+        domain:       'AI_SWARM',
+        confidence:   deflectedToTeller ? 0.05 : 0.85,
+        matchedFaqId: null,
+      };
     }
-
-    const answerText = answer.trim();
-    const deflectedToTeller =
-      /teller|counter|branch staff|speak with|visit the branch/i.test(answerText);
-
-    return {
-      answer:       answerText,
-      confident:    !deflectedToTeller,
-      domain:       'WXO_AGENT',
-      confidence:   deflectedToTeller ? 0.05 : 0.85,
-      matchedFaqId: null,
-    };
   } catch (err) {
-    if (localMatch.confident) {
-      console.info('[faqAgent] Fast-path: returning local KB match (WXO took >2.5s or unreachable)');
-      return localMatch;
-    }
-    console.warn('[faqAgent] FAQ agent unavailable, using local fallback:', err.message);
-    return localFaqLookup(question);
+    console.warn('[faqAgent] Parallel AI FAQ lookup error:', err.message);
   }
+
+  return localMatch;
 }
 
 /**

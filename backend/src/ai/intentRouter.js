@@ -214,16 +214,43 @@ function localFallbackRoute(text, accountContext) {
  * @returns {Promise<{routing: object, detectedLanguage: string, cleanText: string}>}
  */
 export async function processKioskQuery(rawText, accountContext = {}, declaredLanguage = 'auto') {
-  // Step 1: Localize and redact PII
-  const { cleanText, detectedLanguage } = await localizeInput(rawText, declaredLanguage);
-
-  // Step 2: Route intent via Master Orchestrator
-  const routing = await routeIntent(cleanText, accountContext);
-
-  // Step 3: If non-English, translate the voice response back
-  if (detectedLanguage && detectedLanguage !== 'en') {
-    routing.voiceResponse = await translateResponse(routing.voiceResponse, detectedLanguage);
+  if (!rawText || !rawText.trim()) {
+    return {
+      routing: localFallbackRoute('help', accountContext),
+      detectedLanguage: 'en',
+      cleanText: '',
+    };
   }
 
-  return { routing, detectedLanguage, cleanText };
+  // 1. Fast-path check: local fallback route (< 1ms)
+  const localRoute = localFallbackRoute(rawText, accountContext);
+  const isPlainAscii = /^[\x00-\x7F]+$/.test(rawText.trim());
+
+  if (isPlainAscii && localRoute.confidence >= 0.75) {
+    return {
+      routing: localRoute,
+      detectedLanguage: 'en',
+      cleanText: rawText.trim(),
+    };
+  }
+
+  // 2. Parallel path: Run localizer and routeIntent concurrently via Promise.all
+  try {
+    const [locResult, routeResult] = await Promise.all([
+      localizeInput(rawText, declaredLanguage).catch(() => ({ cleanText: rawText, detectedLanguage: 'en' })),
+      routeIntent(rawText, accountContext).catch(() => localRoute),
+    ]);
+
+    const cleanText = locResult?.cleanText || rawText;
+    const detectedLanguage = locResult?.detectedLanguage || 'en';
+    const routing = routeResult?.intent ? routeResult : localRoute;
+
+    if (detectedLanguage && detectedLanguage !== 'en' && routing.voiceResponse) {
+      routing.voiceResponse = await translateResponse(routing.voiceResponse, detectedLanguage).catch(() => routing.voiceResponse);
+    }
+
+    return { routing, detectedLanguage, cleanText };
+  } catch (_) {
+    return { routing: localRoute, detectedLanguage: 'en', cleanText: rawText };
+  }
 }

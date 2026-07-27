@@ -222,10 +222,13 @@ export async function verifyOTP(req, res) {
   //  1. Watchdog AML Agent (check account for scams / structuring)
   //  2. Compliance / Document linking status check
   //  3. Advisor Cross-Sell Agent (generate offer / ad card for instant popup)
-  const [[failedTxSummary], [loginSwarm]] = await Promise.all([
+  const [failedTxRes, loginSwarmRes] = await Promise.all([
     withTimeout(fetchFailedTxSummary(account.id), CBS_QUERY_TIMEOUT_MS),
-    withTimeout(executeLoginSwarm(account.id), 5000),
+    withTimeout(executeLoginSwarm(account.id), 8000),
   ]);
+
+  const failedTxSummary = failedTxRes?.[0] || null;
+  const loginSwarm     = loginSwarmRes?.[0] || null;
 
   // Issue kiosk JWT (expires in 35 min — slightly longer than Redis session TTL of 30 min)
   const jti = uuidv4();
@@ -261,6 +264,7 @@ export async function verifyOTP(req, res) {
     jwt: token,
     failed_tx_summary: failedTxSummary ?? null,
     account_status: {
+      account_number: String(accountDetails.account_number || account_number),
       pan_linked: Boolean(accountDetails.pan_linked),
       pan_number: accountDetails.pan_number || null,
       full_name: accountDetails.full_name || 'Valued Customer',

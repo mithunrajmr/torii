@@ -92,19 +92,41 @@ export async function getFaqGaps(req, res) {
 
 // ── GET /api/teller/tickets ───────────────────────────────────────────────────
 export async function getPendingTickets(req, res) {
+  const { status } = req.query;
   try {
-    const rows = await query`
-      SELECT
-        t.id, t.account_id, t.status, t.document_path,
-        t.ocr_data, t.ai_confidence, t.name_mismatch_score,
-        t.aml_flagged, t.session_id, t.created_at,
-        a.account_number
-      FROM teller_tickets t
-      LEFT JOIN accounts a ON t.account_id = a.id
-      WHERE t.status IN ('PENDING', 'PENDING_MANUAL_REVIEW')
-      ORDER BY t.created_at DESC
-    `;
-    res.status(200).json(rows);
+    const rows = status === 'all'
+      ? await query`
+          SELECT
+            t.id, t.account_id, t.status, t.document_path,
+            t.ocr_data, t.ai_confidence, t.name_mismatch_score,
+            t.aml_flagged, t.session_id, t.created_at,
+            a.account_number
+          FROM teller_tickets t
+          LEFT JOIN accounts a ON t.account_id = a.id
+          ORDER BY t.created_at DESC
+          LIMIT 100
+        `
+      : await query`
+          SELECT
+            t.id, t.account_id, t.status, t.document_path,
+            t.ocr_data, t.ai_confidence, t.name_mismatch_score,
+            t.aml_flagged, t.session_id, t.created_at,
+            a.account_number
+          FROM teller_tickets t
+          LEFT JOIN accounts a ON t.account_id = a.id
+          WHERE t.status IN ('PENDING', 'PENDING_MANUAL_REVIEW')
+          ORDER BY t.created_at DESC
+        `;
+
+    const tickets = rows.map((r) => {
+      let parsedOcr = r.ocr_data;
+      if (typeof r.ocr_data === 'string') {
+        try { parsedOcr = JSON.parse(r.ocr_data); } catch (_) { parsedOcr = {}; }
+      }
+      return { ...r, ocr_data: parsedOcr || {} };
+    });
+
+    res.status(200).json(tickets);
   } catch (err) {
     console.error('[tellerController] Error fetching tickets:', err);
     res.status(500).json({ error: 'ERR_FETCH_TICKETS_FAILED' });
@@ -155,7 +177,8 @@ export async function handleTellerAction(req, res) {
     }
 
     if (action === 'APPROVE') {
-      const panNumber = ticket.ocr_data?.pan_number || 'ABCDE1234F';
+      const ocr = typeof ticket.ocr_data === 'string' ? (JSON.parse(ticket.ocr_data) || {}) : (ticket.ocr_data || {});
+      const panNumber = ocr.pan_number || ocr.id_number || 'BNZPM2501F';
 
       await query`
         UPDATE accounts SET pan_linked = true, pan_number = ${panNumber}

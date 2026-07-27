@@ -1,14 +1,14 @@
 // frontend/src/pages/teller/QueueList.jsx
 import React from 'react';
-import { ShieldAlert, Clock, CheckCircle } from 'lucide-react';
+import { ShieldAlert, CheckCircle, History, Inbox } from 'lucide-react';
 
-export default function QueueList({ tickets, selectedTicket, onSelectTicket, loading }) {
+export default function QueueList({ tickets, selectedTicket, onSelectTicket, loading, filterMode, onFilterChange }) {
   if (loading) {
     return (
       <div className="neo-card p-6 h-full flex items-center justify-center">
         <div className="text-center space-y-2">
           <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin mx-auto" />
-          <p className="text-xs text-slate-500 font-medium">Loading ticket queue...</p>
+          <p className="text-xs text-slate-500 font-medium">Loading tickets...</p>
         </div>
       </div>
     );
@@ -17,23 +17,54 @@ export default function QueueList({ tickets, selectedTicket, onSelectTicket, loa
   return (
     <div className="neo-card p-6 h-full flex flex-col justify-between">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Pending Review Queue</h2>
-          <span className="neo-inset px-3 py-1 text-xs font-bold text-blue-600 rounded-full">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">HITL Workstation Queue</h2>
+          <span className="neo-inset px-2.5 py-0.5 text-xs font-bold text-blue-600 rounded-full">
             {tickets.length} Ticket(s)
           </span>
+        </div>
+
+        {/* Tab Toggle: Pending vs All Audit History */}
+        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-200/70 rounded-xl mb-4 text-xs font-bold">
+          <button
+            onClick={() => onFilterChange('pending')}
+            className={`py-1.5 rounded-lg flex items-center justify-center space-x-1 transition-all ${
+              filterMode === 'pending'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Inbox className="w-3.5 h-3.5" />
+            <span>Pending</span>
+          </button>
+          <button
+            onClick={() => onFilterChange('all')}
+            className={`py-1.5 rounded-lg flex items-center justify-center space-x-1 transition-all ${
+              filterMode === 'all'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Audit History</span>
+          </button>
         </div>
 
         {tickets.length === 0 ? (
           <div className="neo-inset p-6 text-center rounded-2xl">
             <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
             <p className="text-xs font-semibold text-slate-600">Queue Clear!</p>
-            <p className="text-[11px] text-slate-400 mt-1">No pending verification tickets.</p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              {filterMode === 'all' ? 'No tickets recorded yet.' : 'No pending verification tickets.'}
+            </p>
           </div>
         ) : (
-          <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
             {tickets.map((t) => {
               const isSelected = selectedTicket?.id === t.id;
+              const isApproved = t.status === 'APPROVED';
+              const isRejected = t.status === 'REJECTED';
+
               return (
                 <div
                   key={t.id}
@@ -48,11 +79,23 @@ export default function QueueList({ tickets, selectedTicket, onSelectTicket, loa
                     <span className="text-xs font-bold font-mono text-slate-800">
                       #{t.id.slice(0, 8)}
                     </span>
-                    {t.aml_flagged && (
-                      <span className="p-1 bg-red-100 text-red-600 rounded-full" title="AML Suspicious">
-                        <ShieldAlert className="w-3.5 h-3.5" />
-                      </span>
-                    )}
+                    <div className="flex items-center space-x-1">
+                      {isApproved && (
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-extrabold text-[10px] rounded-full border border-emerald-200">
+                          APPROVED
+                        </span>
+                      )}
+                      {isRejected && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 font-extrabold text-[10px] rounded-full border border-red-200">
+                          REJECTED
+                        </span>
+                      )}
+                      {t.aml_flagged && (
+                        <span className="p-1 bg-red-100 text-red-600 rounded-full" title="AML Suspicious">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex justify-between items-center text-xs text-slate-500">

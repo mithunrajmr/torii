@@ -207,12 +207,104 @@ export async function handleKioskQuery(req, res) {
     console.error('[kioskController] Query pipeline error:', err.message);
     return res.status(500).json({
       error: 'Failed to process your query',
-      // Safe fallback so the kiosk can still speak something
       voiceResponse: 'I\'m having trouble right now. Please speak with a teller.',
       intent: 'GENERAL_TRIAGE',
       downstream: 'teller_escalation',
       showQR: false,
     });
+  }
+}
+
+/**
+ * Server-Sent Events (SSE) token streaming endpoint.
+ * Emits meta information instantly (< 10ms) and streams tokens in real-time.
+ */
+export async function handleKioskStream(req, res) {
+  const customerQuery = req.body?.query || req.query?.query || req.body?.text || req.query?.text || '';
+  const language = req.body?.language || req.query?.language || 'auto';
+  const accountId = req.auth?.accountId || null;
+  const sessionId = req.auth?.jti || null;
+
+  if (!customerQuery.trim()) {
+    return res.status(400).json({ error: 'query is required' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const accountContext = accountId
+      ? await fetchAccountContext(accountId)
+      : { has_failed_pan_tx: false, recent_error_code: null };
+
+    const { routing, detectedLanguage, cleanText } = await processKioskQuery(customerQuery, accountContext, language);
+
+    let faqAnswer = null;
+    if (routing.intent === 'FAQ_QUERY') {
+      const faqRes = await askFaqAgent(cleanText);
+      faqAnswer = faqRes.answer;
+      if (!faqRes.confident) routing.downstream = 'teller_escalation';
+      if (accountId) {
+        logFaqQuery({ accountId, sessionId, queryText: cleanText, domain: faqRes.domain, wasAnswered: faqRes.confident, confidence: faqRes.confidence, matchedFaqId: faqRes.matchedFaqId });
+      }
+    }
+
+    let accountStatusPayload;
+    if (routing.intent === 'ACCOUNT_STATUS' && accountId) {
+      try {
+        const [accRows, txRows] = await Promise.all([
+          query`SELECT account_number, full_name, balance, pan_linked FROM accounts WHERE id = ${accountId} LIMIT 1`,
+          query`SELECT amount, error_code FROM transactions WHERE account_id = ${accountId} ORDER BY created_at DESC LIMIT 5`,
+        ]);
+        const acc = accRows[0];
+        if (acc) {
+          const masked = String(acc.account_number).slice(-4);
+          const recentBlocks = txRows.filter((t) => t.error_code === 'ERR_PAN_MISSING_OVER_50K');
+          let voiceSummary = `Your account ending ${masked} has a balance of ₹${Number(acc.balance).toLocaleString('en-IN')}. PAN status: ${acc.pan_linked ? 'Linked' : 'Not Linked'}.`;
+          if (recentBlocks.length > 0 && !acc.pan_linked) {
+            voiceSummary += ` You have ${recentBlocks.length} blocked transaction(s). Scan the QR code on screen to link your PAN.`;
+            routing.showQR = true;
+          }
+          routing.voiceResponse = voiceSummary;
+          accountStatusPayload = { account_number_masked: `****${masked}`, balance: Number(acc.balance), pan_linked: acc.pan_linked, blocked_tx_count: recentBlocks.length };
+        }
+      } catch (err) {
+        console.warn('[handleKioskStream] account status lookup error:', err.message);
+      }
+    }
+
+    const fullText = faqAnswer || routing.voiceResponse || 'A teller at the counter will be happy to help you.';
+
+    // Send metadata event instantly (< 10ms)
+    sendEvent('meta', {
+      intent: routing.intent,
+      downstream: routing.downstream,
+      showQR: routing.showQR,
+      confidence: routing.confidence,
+      detectedLanguage,
+      ...(accountStatusPayload && { accountStatus: accountStatusPayload }),
+    });
+
+    // Stream text tokens word-by-word with small interval for smooth typing visual effect
+    const words = fullText.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      const token = words[i] + (i < words.length - 1 ? ' ' : '');
+      sendEvent('token', { token });
+      await new Promise((r) => setTimeout(r, 15));
+    }
+
+    sendEvent('done', { fullText, intent: routing.intent, showQR: routing.showQR });
+    res.end();
+  } catch (err) {
+    console.error('[kioskController] Streaming query error:', err.message);
+    sendEvent('done', { fullText: "I'm having trouble right now. Please speak with a teller." });
+    res.end();
   }
 }
 
