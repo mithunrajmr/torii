@@ -177,11 +177,40 @@ export async function chatWithAgent(agentId, userMsg, context = {}) {
 export async function chatWithAgentJSON(agentId, userMsg, fallback, context = {}) {
   try {
     const text = await chatWithAgent(agentId, userMsg, context);
-    // Strip markdown code fences if the model wraps output in ```json … ```
-    // Also handles fences embedded mid-text (e.g. prose before the JSON block)
+    if (!text || !text.trim()) return fallback;
+
+    // 1. Strip markdown code fences if present (```json ... ```)
     const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    const cleaned = fenceMatch ? fenceMatch[1].trim() : text.trim();
-    return JSON.parse(cleaned);
+    let candidate = fenceMatch ? fenceMatch[1].trim() : text.trim();
+
+    // 2. Direct JSON.parse
+    try {
+      return JSON.parse(candidate);
+    } catch (_) {
+      // 3. Extract JSON object or array using bracket matching
+      const startObj = candidate.indexOf('{');
+      const startArr = candidate.indexOf('[');
+      let startIdx = -1;
+      let endChar = '}';
+
+      if (startObj !== -1 && (startArr === -1 || startObj < startArr)) {
+        startIdx = startObj;
+        endChar = '}';
+      } else if (startArr !== -1) {
+        startIdx = startArr;
+        endChar = ']';
+      }
+
+      if (startIdx !== -1) {
+        const lastIdx = candidate.lastIndexOf(endChar);
+        if (lastIdx > startIdx) {
+          const sub = candidate.slice(startIdx, lastIdx + 1);
+          return JSON.parse(sub);
+        }
+      }
+    }
+
+    throw new Error(`No parseable JSON structure found in output`);
   } catch (err) {
     console.warn(`[orchestrateClient] JSON parse failed for agent ${agentId}:`, err.message);
     return fallback;

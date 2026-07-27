@@ -235,11 +235,15 @@ export default function KioskLogin() {
       }
 
       sessionStorage.setItem('kiosk_jwt', data.jwt);
+      if (data.login_swarm) {
+        sessionStorage.setItem('login_swarm', JSON.stringify(data.login_swarm));
+      }
       navigate('/kiosk/triage', {
         state: {
           jwt: data.jwt,
           failedTxSummary: data.failed_tx_summary,
           accountStatus: data.account_status,
+          loginSwarm: data.login_swarm,
         },
       });
 

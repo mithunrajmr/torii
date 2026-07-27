@@ -59,6 +59,9 @@ export async function askFaqAgent(question) {
     };
   }
 
+  // 1. Instant local KB lookup (< 5ms execution)
+  const localMatch = localFaqLookup(question);
+
   const prompt =
     `Answer this customer's banking question at the kiosk.\n` +
     `Customer question: "${question}"\n\n` +
@@ -66,30 +69,37 @@ export async function askFaqAgent(question) {
     `and return ONLY the answer text — no JSON, no markdown, no labels.`;
 
   try {
-    const answer = await chatWithAgent(FAQ_AGENT_ID, prompt, null);
+    // 2. Race WXO agent with a 2.5s timeout if a local match is available
+    const timeoutMs = localMatch.confident ? 2500 : 8000;
+
+    const wxoPromise = chatWithAgent(FAQ_AGENT_ID, prompt, null);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('WXO_TIMEOUT')), timeoutMs)
+    );
+
+    const answer = await Promise.race([wxoPromise, timeoutPromise]);
 
     if (!answer || !answer.trim()) {
-      throw new Error('Empty response from FAQ agent — using local KB');
+      throw new Error('Empty response from FAQ agent');
     }
 
     const answerText = answer.trim();
-
-    // Heuristic: if the agent mentions "teller" or "counter" it had low confidence
     const deflectedToTeller =
       /teller|counter|branch staff|speak with|visit the branch/i.test(answerText);
 
     return {
       answer:       answerText,
       confident:    !deflectedToTeller,
-      // Domain and confidence aren't directly returned in the text response —
-      // the agent handles log_faq_query internally. We surface best-effort values
-      // so kioskController can also write to faq_query_log independently.
-      domain:       null,   // populated by the agent's internal log_faq_query call
-      confidence:   deflectedToTeller ? 0.05 : 0.25,  // conservative estimate
+      domain:       'WXO_AGENT',
+      confidence:   deflectedToTeller ? 0.05 : 0.85,
       matchedFaqId: null,
     };
   } catch (err) {
-    console.warn('[faqAgent] FAQ agent unavailable, using local KB:', err.message);
+    if (localMatch.confident) {
+      console.info('[faqAgent] Fast-path: returning local KB match (WXO took >2.5s or unreachable)');
+      return localMatch;
+    }
+    console.warn('[faqAgent] FAQ agent unavailable, using local fallback:', err.message);
     return localFaqLookup(question);
   }
 }

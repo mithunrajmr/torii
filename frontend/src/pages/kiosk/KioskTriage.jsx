@@ -65,6 +65,14 @@ export default function KioskTriage() {
   );
   const accountStatus = location.state?.accountStatus || null;
 
+  // Retrieve instant login swarm results (Watchdog AML, Compliance, Advisor Cross-Sell Ad)
+  const loginSwarm = location.state?.loginSwarm || (() => {
+    try {
+      const saved = sessionStorage.getItem('login_swarm');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  })();
+
   // If no JWT present, auto-authenticate in dev mode
   const [devBooting, setDevBooting] = useState(!jwt);
 
@@ -409,6 +417,20 @@ export default function KioskTriage() {
                 Dismiss
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── Instant Advisor Cross-Sell Offer Banner (Triggered Instantly on Login) ────── */}
+        {loginSwarm?.advisor && (
+          <div className="neo-card p-5 border-l-4 border-blue-500 bg-blue-50/70 space-y-2 shadow-sm transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-200">
+                ⭐ Instant Personalised Bank Offer ({loginSwarm.advisor.type || 'FD'})
+              </span>
+              <span className="text-[11px] text-slate-500 font-mono">Live Agent: Advisor</span>
+            </div>
+            <h4 className="text-sm font-bold text-slate-800">{loginSwarm.advisor.title}</h4>
+            <p className="text-xs text-slate-600 leading-relaxed">{loginSwarm.advisor.offer}</p>
           </div>
         )}
 

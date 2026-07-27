@@ -70,12 +70,18 @@ export async function uploadMobileDocument(req, res) {
     const currentAttemptStr = await redisGet(uploadAttemptsKey(accountId));
     const currentAttempt = parseInt(currentAttemptStr || '0', 10);
 
-    // 1. Upload raw image to Supabase Storage (always — even before OCR)
-    const documentPath = await uploadDocument(
-      `pan_${accountId}_${Date.now()}.${file.mimetype.split('/')[1] || 'jpg'}`,
-      file.buffer,
-      file.mimetype
-    );
+    // 1. Upload raw image to Supabase Storage (fallback to memory data URL if storage fails)
+    let documentPath;
+    try {
+      documentPath = await uploadDocument(
+        `pan_${accountId}_${Date.now()}.${file.mimetype.split('/')[1] || 'jpg'}`,
+        file.buffer,
+        file.mimetype
+      );
+    } catch (uploadErr) {
+      console.warn('[mobileController] Storage upload failed, using in-memory data URL fallback:', uploadErr.message);
+      documentPath = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    }
 
     // 2. Run parallel AI swarm: Vision OCR + Watchdog AML + Advisor
     // Pass sessionId so telemetry can be linked to this session

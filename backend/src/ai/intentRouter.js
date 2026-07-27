@@ -134,10 +134,10 @@ export async function routeIntent(cleanText, accountContext = {}) {
  * @returns {{ intent, downstream, confidence, voiceResponse, showQR, contextOverride }}
  */
 function localFallbackRoute(text, accountContext) {
-  const t = text.toLowerCase();
+  const t = text.toLowerCase().trim();
 
-  // Greeting / Conversational check -> route to FAQ agent for a friendly welcome
-  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i.test(t.trim())) {
+  // 1. Greeting / Conversational check
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i.test(t)) {
     return {
       intent: 'FAQ_QUERY',
       downstream: 'faq_agent',
@@ -148,15 +148,29 @@ function localFallbackRoute(text, accountContext) {
     };
   }
 
-  // PAN missing — also honour the account context flag
+  // 2. Explicit FAQ — general banking questions (interest rates, branch hours, FD, loans, limits, etc.)
   if (
-    accountContext.has_failed_pan_tx ||
-    /pan|kyc|document|upload|link|50.?000|50k|verify identity/i.test(t)
+    /what|how|when|where|why|interest|rate|fee|charge|limit|loan|fd|fixed deposit|saving|current|neft|rtgs|upi|atm|card|block|ifsc|branch|hours|open|close|minimum|balance/i.test(t)
+  ) {
+    return {
+      intent: 'FAQ_QUERY',
+      downstream: 'faq_agent',
+      confidence: 0.85,
+      voiceResponse: 'Let me look that up for you.',
+      showQR: false,
+      contextOverride: false,
+    };
+  }
+
+  // 3. PAN / KYC missing — explicit request OR account status error query
+  if (
+    /pan|kyc|document|upload|link|50.?000|50k|verify identity/i.test(t) ||
+    (accountContext.has_failed_pan_tx && /status|my account|problem|issue|block|resolve|fix|failed|error/i.test(t))
   ) {
     return {
       intent: 'PAN_MISSING',
       downstream: 'mobile_handoff',
-      confidence: 0.7,
+      confidence: 0.75,
       voiceResponse:
         'It looks like we need your PAN card to proceed. ' +
         'Please scan the QR code with your phone to upload your document.',
@@ -165,21 +179,7 @@ function localFallbackRoute(text, accountContext) {
     };
   }
 
-  // FAQ — general banking questions
-  if (
-    /what|how|when|where|why|interest|rate|fee|charge|limit|account|balance|loan|fd|fixed deposit|saving|current|neft|rtgs|upi|atm|card|block|ifsc|branch|hours|open|close/i.test(t)
-  ) {
-    return {
-      intent: 'FAQ_QUERY',
-      downstream: 'faq_agent',
-      confidence: 0.65,
-      voiceResponse: 'Let me look that up for you.',
-      showQR: false,
-      contextOverride: false,
-    };
-  }
-
-  // Account status check
+  // 4. Account status check
   if (/status|transaction|transfer|pending|failed|error|problem|issue|stuck/i.test(t)) {
     return {
       intent: 'ACCOUNT_STATUS',
@@ -191,7 +191,7 @@ function localFallbackRoute(text, accountContext) {
     };
   }
 
-  // Default — send to teller
+  // 5. Default — send to teller
   return {
     intent: 'GENERAL_TRIAGE',
     downstream: 'teller_escalation',

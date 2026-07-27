@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Smartphone, UserCheck, FlaskConical, ExternalLink } from 'lucide-react';
+import { Monitor, Smartphone, UserCheck, FlaskConical, Bug, ExternalLink } from 'lucide-react';
 
 const WORKSPACES = [
   {
@@ -20,15 +20,15 @@ const WORKSPACES = [
     requiresAuth: true,
   },
   {
-    id: 'mobile',
-    route: '/mobile',
-    label: 'Mobile PWA',
-    sublabel: 'Customer Upload',
-    desc: 'Document capture & live status',
-    hint: 'Scan QR code generated at kiosk',
-    icon: Smartphone,
-    iconBg: 'bg-emerald-600',
-    accentDot: 'bg-emerald-400',
+    id: 'debug',
+    route: '/debug/agents',
+    label: 'Agent Debug Console',
+    sublabel: 'Live AI Inspector',
+    desc: 'Test all 6 WXO agents & inspect SSE output',
+    hint: 'Real DB & Manual Modes',
+    icon: Bug,
+    iconBg: 'bg-indigo-600',
+    accentDot: 'bg-indigo-400',
     requiresAuth: false,
   },
   {

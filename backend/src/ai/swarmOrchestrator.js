@@ -64,7 +64,7 @@ async function logAgentPerformance({ agentName, sessionId, ticketId, execMs, inp
  * AML structuring risk check.
  * Calls the watsonx Orchestrate Watchdog agent with recent transaction history.
  */
-async function runWatchdogAgent(accountId) {
+export async function runWatchdogAgent(accountId) {
   const rows = await query`
     SELECT amount, created_at
     FROM transactions
@@ -112,7 +112,7 @@ async function runWatchdogAgent(accountId) {
  * Personalized cross-sell offer generator.
  * Calls the watsonx Orchestrate Advisor agent with the customer's balance profile.
  */
-async function runAdvisorAgent(accountId) {
+export async function runAdvisorAgent(accountId) {
   const rows = await query`
     SELECT balance FROM accounts WHERE id = ${accountId} LIMIT 1
   `;
@@ -142,6 +142,41 @@ async function runAdvisorAgent(accountId) {
     title: String(result.title).slice(0, 60),
     offer: String(result.offer).slice(0, 120),
     type:  result.type || 'FD',
+  };
+}
+
+/**
+ * Execute the 3 instant login checks concurrently:
+ *  1. Watchdog AML Agent (check account for scams/structuring)
+ *  2. Compliance / Document linking status
+ *  3. Advisor Agent (cross-sell offer / ad card for instant popup display)
+ */
+export async function executeLoginSwarm(accountId) {
+  const [watchdog, advisor, accountRows] = await Promise.all([
+    runWatchdogAgent(accountId).catch((err) => {
+      console.warn('[loginSwarm] Watchdog agent error:', err.message);
+      return { isSuspicious: false, riskLevel: 'LOW', reason: 'Analysis fallback' };
+    }),
+    runAdvisorAgent(accountId).catch((err) => {
+      console.warn('[loginSwarm] Advisor agent error:', err.message);
+      return { title: '7.75% Fixed Deposit', offer: 'Lock in guaranteed returns for 12 months, starting ₹10,000.', type: 'FD' };
+    }),
+    query`SELECT pan_linked, pan_number, full_name, balance FROM accounts WHERE id = ${accountId} LIMIT 1`,
+  ]);
+
+  const acc = accountRows[0] || {};
+  const panLinked = Boolean(acc.pan_linked);
+
+  return {
+    watchdog,
+    advisor,
+    compliance: {
+      pan_linked: panLinked,
+      pan_number: acc.pan_number || null,
+      full_name: acc.full_name || 'Valued Customer',
+      balance: Number(acc.balance || 0),
+      linking_required: !panLinked,
+    },
   };
 }
 

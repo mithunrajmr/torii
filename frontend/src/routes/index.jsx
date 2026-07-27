@@ -27,6 +27,8 @@ const SandboxDashboard = lazy(() => import('../pages/sandbox/SandboxDashboard.js
 // Gemini OCR Multimodal Lab (Demo Studio)
 const OcrDemoPage = lazy(() => import('../pages/ocr/OcrDemoPage.jsx'));
 
+// Debug workspace (Isolated Debug & Validation Console)
+const AgentDebugConsole = lazy(() => import('../pages/debug/AgentDebugConsole.jsx'));
 
 function WorkspaceLoader() {
   return (
@@ -67,6 +69,10 @@ export default function AppRoutes() {
 
         {/* Gemini OCR Multimodal Lab (Demo Studio) */}
         <Route path="/ocr-demo" element={<OcrDemoPage />} />
+
+        {/* Isolated Agent Debug Console */}
+        <Route path="/debug/agents" element={<AgentDebugConsole />} />
+        <Route path="/debug"        element={<Navigate to="/debug/agents" replace />} />
       </Routes>
     </Suspense>
   );

@@ -30,6 +30,7 @@ import {
 } from '../cache/sessionManager.js';
 import { emitAuthEvent, AuditEventType } from '../ai/governanceSidecar.js';
 import { sendOTPEmail } from '../services/notificationService.js';
+import { executeLoginSwarm } from '../ai/swarmOrchestrator.js';
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'torii-secret-key-123456789';
 process.env.DOMAIN = process.env.DOMAIN || 'localhost:3000';
@@ -217,9 +218,14 @@ export async function verifyOTP(req, res) {
   // OTP is valid — consume it
   await deleteOTP(account.id);
 
-  // CBS ledger lookup with graceful timeout degradation (Req 4.6)
-  const [failedTxSummary] = await withTimeout(fetchFailedTxSummary(account.id), CBS_QUERY_TIMEOUT_MS);
-  // If withTimeout returns [null, 'TIMEOUT'], failedTxSummary is null — that's the intended degradation
+  // Run CBS ledger lookup and instant Agent Swarm on login concurrently (Promise.all)
+  //  1. Watchdog AML Agent (check account for scams / structuring)
+  //  2. Compliance / Document linking status check
+  //  3. Advisor Cross-Sell Agent (generate offer / ad card for instant popup)
+  const [[failedTxSummary], [loginSwarm]] = await Promise.all([
+    withTimeout(fetchFailedTxSummary(account.id), CBS_QUERY_TIMEOUT_MS),
+    withTimeout(executeLoginSwarm(account.id), 5000),
+  ]);
 
   // Issue kiosk JWT (expires in 35 min — slightly longer than Redis session TTL of 30 min)
   const jti = uuidv4();
@@ -259,6 +265,7 @@ export async function verifyOTP(req, res) {
       pan_number: accountDetails.pan_number || null,
       full_name: accountDetails.full_name || 'Valued Customer',
     },
+    login_swarm: loginSwarm ?? null,
   });
 
   // Fire-and-forget audit
@@ -275,15 +282,15 @@ export async function verifyOTP(req, res) {
 export async function generateQRToken(req, res) {
   const { accountId, jti } = req.auth;
 
-  // Generate 32 random bytes → URL-safe base64 (Req 5.5)
+  // Generate 32 random bytes → URL-safe base64
   const tokenBytes = crypto.randomBytes(32);
   const token = tokenBytes.toString('base64url');
 
   await createQRToken(token, accountId);
 
-  const host = req.headers.host || process.env.DOMAIN || 'localhost:3000';
-  const protocol = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
-  const deepLinkUrl = `${protocol}://${host}/mobile/${token}`;
+  // Construct frontend deep link URL (defaulting to http://localhost:3000)
+  const frontendHost = process.env.FRONTEND_URL || (req.headers.origin ? req.headers.origin : 'http://localhost:3000');
+  const deepLinkUrl = `${frontendHost.replace(/\/$/, '')}/mobile/${token}`;
 
   res.status(200).json({ qr_token: token, deep_link_url: deepLinkUrl });
 

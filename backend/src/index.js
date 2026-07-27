@@ -11,6 +11,7 @@ import tellerRoutes from './routes/tellerRoutes.js';
 import kioskRoutes from './routes/kioskRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
 import sandboxRoutes, { chaosInterceptor } from './routes/sandboxRoutes.js';
+import debugRoutes from './routes/debugRoutes.js';
 import { query } from './db/index.js';
 import { set as redisSet, get as redisGet } from './cache/redisClient.js';
 
@@ -126,11 +127,18 @@ app.use('/api/mobile', mobileRoutes);
 app.use('/api/teller', tellerRoutes);
 app.use('/api/kiosk', kioskRoutes);
 app.use('/api/system', systemRoutes);
+app.use('/api/debug', debugRoutes);
 
 // Sandbox control plane — dev/test only
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/sandbox', sandboxRoutes);
 }
+
+// Mobile QR fallback redirect — if someone opens /mobile/:token directly on backend port 5000
+app.get('/mobile/:token', (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return res.redirect(`${frontendUrl.replace(/\/$/, '')}/mobile/${req.params.token}`);
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
