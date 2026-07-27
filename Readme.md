@@ -8,13 +8,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![IBM watsonx](https://img.shields.io/badge/IBM-watsonx%20Orchestrate-blueviolet.svg)](https://www.ibm.com/products/watsonx-orchestrate)
-[![Google Gemini](https://img.shields.io/badge/Google-Gemini%202.5%20Flash-4285F4.svg)](https://deepmind.google/technologies/gemini/)
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-339933.svg)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-v18.3-61DAFB.svg)](https://reactjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1.svg)](https://supabase.com)
 [![Redis](https://img.shields.io/badge/Redis-Upstash-DC382D.svg)](https://upstash.com)
 
-[The Vision](#1-the-vision) • [The Name & Meaning](#2-the-name--meaning) • [Before vs After](#3-the-branch-transformation-before-vs-after) • [Quantified Business Value](#4-quantified-business-value) • [Design Principles](#5-enterprise-design-principles) • [The Customer Story](#6-the-customer-story-a-real-world-scenario) • [Architecture Rationales](#7-architectural-rationales-why-was-it-built-this-way) • [Extensibility](#8-why-this-architecture-scales) • [System Architecture](#system-architecture) • [API Reference](#api-documentation)
+[The Vision](#1-the-vision) • [The Name & Meaning](#2-the-name--meaning) • [Before vs After](#3-the-branch-transformation-before-vs-after) • [Quantified Business Value](#4-quantified-business-value) • [Design Principles](#5-enterprise-design-principles) • [The Customer Story](#6-the-customer-story-a-real-world-scenario) • [Architectural Rationales](#7-architectural-rationales-why-was-it-built-this-way) • [Extensibility](#8-why-this-architecture-scales) • [System Architecture](#system-architecture) • [API Reference](#api-documentation)
 
 </div>
 
@@ -97,20 +96,39 @@ TORII was built according to six core enterprise architectural principles:
 To understand the platform in action, consider **Arjun**, a customer whose ₹75,000 transaction was blocked under Section 139A of the Indian Income Tax Act because his PAN card was unlinked:
 
 ```
-  [1] Arjun enters Kiosk ──> [2] 2FA OTP Verification ──> [3] Kiosk Copilot Diagnoses Block
-                                                                   │
-  [6] Instant CBS Approval <── [5] Teller Reviews Case <── [4] Scans QR & Uploads via Mobile PWA
+  [1] Login & Instant Login Swarm ──> [2] Proactive Dialogue & Quick-Fix Drawer ──> [3] QR Mobile Handoff
+                                                                                              │
+  [6] Instant CBS Approval <─────── [5] HITL Teller Review & Feedback <── [4] Quality-Gated Upload
 ```
 
-1. **Proactive Diagnosis at the Kiosk**: Arjun steps up to the kiosk and enters his account number. He receives a 6-digit OTP on his phone (`POST /api/auth/otp/request`) and verifies it (`POST /api/auth/otp/verify`). The kiosk immediately checks the CBS ledger, detects his recent blocked ₹75,000 transfer, and speaks: *"Welcome Arjun! Your ₹75,000 transaction was blocked because your PAN card is not linked."*
-2. **Frictionless QR Mobile Handoff**: The kiosk Copilot prompts Arjun: *"Scan this QR code with your phone to upload your PAN card."* The kiosk generates a single-use, 32-byte encrypted QR token (`POST /api/auth/qr/generate`). Arjun scans it with his smartphone camera, opening the Mobile PWA **without re-entering his password**.
-3. **Smart Mobile Capture**: Arjun snaps a photo of his PAN card. The Mobile PWA performs client-side validation and sends the image buffer to the backend (`POST /api/mobile/upload`).
-4. **Sub-2-Second Parallel AI Swarm Execution**: In under 1.8 seconds, a parallel AI swarm processes the upload:
-   - **Vision OCR Agent (Gemini 2.5 Flash)**: Extracts full name (`ARJUN SHARMA`) and PAN (`ARJNS1234A`), fixes OCR character confusions (e.g. `0` vs `O`), masks Aadhaar numbers (`XXXX-XXXX-1234`), and checks for finger obstructions or defacement.
-   - **Watchdog AML Agent (IBM watsonx)**: Analyzes Arjun's 48-hour transaction history for structuring risk.
-   - **Advisor Agent (IBM watsonx)**: Generates 3 personalized campaign offers (e.g. *Premier Fixed Deposit @ 8.40%*).
-5. **Human-in-the-Loop Teller Review**: A ticket instantly appears on the Teller Workspace dashboard. Teller Sarah sees the original document photo, pre-extracted OCR fields, a 91% name match score, and green anti-fraud indicators.
-6. **Instant Resolution**: Teller Sarah clicks **"Approve"** (`POST /api/teller/action`). The backend mutates the CBS record (`accounts.pan_linked = true`), lifts the transaction hold, dispatches a confirmation email, and writes an audit log. Arjun's mobile phone displays a success confirmation along with his personalized cross-sell offer cards. Total elapsed time: **under 60 seconds**.
+### Step 1: Login & Instant Concurrent Login Swarm
+Arjun steps up to the branch kiosk terminal and enters his 10-digit account number. Upon 2FA OTP verification (`POST /api/auth/otp/verify`), TORII immediately executes `executeLoginSwarm()` in parallel with the CBS ledger query using `Promise.all()`:
+- **Leg 1 — Watchdog AML Agent**: Scans Arjun's recent transaction ledger for scams, unusual structuring, or fraud anomalies.
+- **Leg 2 — Compliance Triage Agent**: Checks whether any identity documents (PAN, Aadhaar, CKYC) or compliance holds were triggered in the last 48 hours.
+- **Leg 3 — Advisor Cross-Sell Agent**: Evaluates Arjun's account balance tier to generate personalized, high-value financial offer cards.
+
+### Step 2: Proactive Dialogue & Bottom Quick-Fix Drawer
+The kiosk home screen updates instantly:
+- **Upper Dialogue Box**: Highlights Arjun's recent failed ₹75,000 transfer, explaining in plain language: *"Welcome Arjun! Your ₹75,000 transaction was blocked under Section 139A because your PAN card is not linked."*
+- **Bottom Quick-Fix Drawer**: Displays a one-click action card: **"⚡ Link PAN Card Now to Unblock Transfer"**.
+
+### Step 3: Encrypted QR Mobile Handoff
+Arjun clicks the quick-fix card. The kiosk calls `POST /api/auth/qr/generate`, issuing a single-use 32-byte cryptographically secure QR token (`qr:token:{token}` stored in Redis for 10 minutes). Arjun scans the code with his smartphone camera, opening the Mobile PWA **without re-entering his password**.
+
+### Step 4: Intelligent Quality-Gated Document Upload
+Arjun snaps a photo of his PAN card on his phone and submits it (`POST /api/mobile/upload`).
+Before any data reaches the teller, TORII's Vision OCR agent executes a strict anti-fraud inspection:
+- **Quality Gating**: If image clarity is `< 0.80`, or if finger obstructions, scribbles, or digital screen capture Moiré patterns are detected, the system rejects the submission (`400 RETAKE_IMAGE`) and prompts Arjun to retake a clear photo.
+- **Data Protection**: Aadhaar numbers are automatically masked (`XXXX-XXXX-1234`), and PAN OCR confusions (e.g. `0` vs `O`) are corrected via `fixPanHeuristics()`.
+
+### Step 5: HITL Teller Verification & Auto-Learning Feedback Loop
+Once a clean photo is accepted, a review ticket enters the Teller Workspace queue. Teller Sarah sees the pre-extracted document fields, a 91% Levenshtein name match score, and green anti-fraud indicators.
+- Teller Sarah clicks **"Approve"** (`POST /api/teller/action`).
+- The backend mutates the CBS record (`accounts.pan_linked = true`), lifts the transaction hold, dispatches an email notification, and records the outcome in `agent_performance_log`.
+- **Continuous Learning**: If a teller overrides an AI recommendation (`teller_override = true`), TORII's feedback loop records the discrepancy to automatically refine model thresholds over time.
+
+### Step 6: Instant Resolution
+Arjun's mobile phone displays a success confirmation along with personalized offer cards generated by the Advisor agent. Total elapsed time: **under 60 seconds**.
 
 ---
 
@@ -122,6 +140,11 @@ Every architectural decision in TORII answers a specific operational or regulato
 - **Problem**: Executing Vision OCR, AML structuring checks, and cross-sell offer generation sequentially took >6 seconds, causing mobile upload timeouts.
 - **Solution**: `swarmOrchestrator.js` executes all three agent legs concurrently using Node.js `Promise.all()`.
 - **Impact**: Total processing time dropped to **under 1.8 seconds**.
+
+### Why Dual-Track Parallel FAQ Engine?
+- **Problem**: Querying cloud-based LLMs for simple banking policy FAQs creates unneeded latency and API overhead.
+- **Solution**: When a customer asks a question at the kiosk, `faqAgent.js` races a fast-path local policy KB lookup (**< 5ms response**) in parallel with a IBM watsonx multi-agent lookup. The system delivers instant responses while logging unanswered queries to `faq_query_log` for staff knowledge base gap analysis.
+- **Impact**: Instant sub-second kiosk voice responses with automatic KB coverage expansion.
 
 ### Why IBM watsonx Orchestrate + Google Gemini 2.5 Flash?
 - **Problem**: Enterprise banking logic requires multi-agent orchestration, but specialized multimodal vision models are needed for document inspection.
@@ -142,11 +165,6 @@ Every architectural decision in TORII answers a specific operational or regulato
 - **Problem**: Static clarity floors and name match thresholds fail when dealing with regional name variations or varying document qualities.
 - **Solution**: Dynamic thresholds (`agent_config` table) are live-editable governance rules cached for 5 minutes. The backend tracks teller overrides (`teller_override` flag in `agent_performance_log`) to enable continuous learning and threshold optimization over time.
 - **Impact**: Live risk tuning without redeploying code.
-
-### Why Built-in Developer & Evaluation Tools?
-- **Problem**: Banking APIs cannot be tested directly against live production Core Banking Systems during evaluation or hackathon demonstrations.
-- **Solution**: We built the **Sandbox Control Plane** (`/sandbox`), **Gemini OCR Lab** (`/ocr-demo`), and **Agent Debug Console** (`/debug/agents`) to simulate mock accounts, seed testing personas, inject network chaos, and validate individual AI agents.
-- **Impact**: Demonstrates engineering maturity, fault tolerance, and complete system testability.
 
 ---
 
@@ -255,18 +273,13 @@ sequenceDiagram
     participant Mobile as 📱 Mobile PWA
     participant Teller as 👨‍💼 Teller Workspace
 
-    Customer->>Kiosk: Enter 10-digit Account Number
-    Kiosk->>Gateway: POST /api/auth/otp/request
-    Gateway->>Redis: SETEX otp:{account_id} 300 {otp}
-    Gateway-->>Kiosk: 200 OK { masked_email }
-
-    Customer->>Kiosk: Enter 6-digit OTP
+    Customer->>Kiosk: Enter 10-digit Account Number & Verify OTP
     Kiosk->>Gateway: POST /api/auth/otp/verify
+    Gateway->>Swarm: executeLoginSwarm() [Watchdog AML + Advisor + Compliance]
     Gateway->>DB: SELECT ERR_PAN_MISSING_OVER_50K tx
-    Gateway->>Redis: SETEX kiosk:session:{jti} 1800 {account_id}
-    Gateway-->>Kiosk: 200 OK { jwt, failed_tx_summary }
+    Gateway-->>Kiosk: Return { jwt, failed_tx_summary, login_swarm }
 
-    Customer->>Kiosk: Select "Link PAN Card"
+    Customer->>Kiosk: Click Quick-Fix Card ("Link PAN Card")
     Kiosk->>Gateway: POST /api/auth/qr/generate (JWT)
     Gateway->>Redis: SETEX qr:token:{token} 600 {account_id}
     Gateway-->>Kiosk: Return { qr_token, deep_link_url }
@@ -275,7 +288,7 @@ sequenceDiagram
     Mobile->>Gateway: GET /mobile/{token}
     Gateway-->>Mobile: Render DocumentUpload UI
 
-    Customer->>Mobile: Upload PAN Card Photo
+    Customer->>Mobile: Upload Document Photo
     Mobile->>Gateway: POST /api/mobile/upload (qr_token, file)
     Gateway->>Swarm: executeParallelSwarm() [Vision + AML + Advisor]
     Swarm-->>Gateway: Return { ocr, watchdog, advisor, entityVerification }
@@ -287,6 +300,7 @@ sequenceDiagram
     Teller->>Gateway: POST /api/teller/action (action: 'APPROVE')
     Gateway->>DB: UPDATE accounts SET pan_linked = true
     Gateway->>DB: UPDATE teller_tickets SET status = 'APPROVED'
+    Gateway->>DB: INSERT INTO agent_performance_log (teller_override)
     Gateway-->>Teller: 200 OK { status: 'APPROVED' }
 
     Mobile->>Gateway: GET /api/mobile/status/{token} (Polling)
@@ -449,6 +463,7 @@ Every capability in TORII is categorized by its verification state in the curren
 | Domain | Feature | Description | Implementation Source |
 | :--- | :--- | :--- | :--- |
 | **Authentication** | **2FA OTP Login** | 6-digit OTP dispatch via SMTP/Resend with Redis 300s TTL & 3-attempt lockouts | [authController.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/controllers/authController.js#L105-L215) |
+| **Authentication** | **Login Swarm** | Concurrent execution of Watchdog AML, Compliance, and Advisor agents on OTP verify | [authController.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/controllers/authController.js#L225-L228) |
 | **Authentication** | **Kiosk & Teller JWT** | Role-based signed JWT access tokens (`CUSTOMER` 35m TTL, `TELLER` 8h TTL) | [authController.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/controllers/authController.js#L236-L256) |
 | **Authentication** | **Staff Login** | Employee ID credential validation issuing long-lived TELLER JWTs | [authController.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/controllers/authController.js#L364-L402) |
 | **Kiosk Engine** | **Proactive Radar** | Intercepts `ERR_PAN_MISSING_OVER_50K` failed transactions from CBS ledger on login | [authController.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/controllers/authController.js#L72-L94) |
@@ -462,7 +477,7 @@ Every capability in TORII is categorized by its verification state in the curren
 | **AI Swarm** | **Anti-Fraud Inspection** | Human compliance officer guardrails for specimen detection, obstructions, and scribbles | [visionAgent.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/visionAgent.js#L97-L171) |
 | **AI Swarm** | **Watchdog AML Agent** | 48-hour transaction history analysis for structuring risk | [swarmOrchestrator.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/swarmOrchestrator.js#L96-L151) |
 | **AI Swarm** | **Advisor Cross-Sell** | Personalized 3-offer campaign generator incorporating account balance and name | [swarmOrchestrator.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/swarmOrchestrator.js#L156-L291) |
-| **AI Swarm** | **FAQ Q&A RAG Agent** | 40-entry bank policy knowledge base RAG with gap analysis logging | [faqAgent.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/faqAgent.js#L76-L130) |
+| **AI Swarm** | **Dual-Track FAQ Engine** | Fast-path local KB race (< 5ms) in parallel with watsonx multi-agent Q&A | [faqAgent.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/faqAgent.js#L76-L130) |
 | **AI Swarm** | **Multilingual Localizer** | Language detection, input PII redaction, and response translation | [intentRouter.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/intentRouter.js#L30-L79) |
 | **Governance** | **PII Privacy Redaction** | Deep-cloning recursive string maskers for PAN and account numbers | [governanceSidecar.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/governanceSidecar.js#L45-L70) |
 | **Governance** | **Immutable Audit Log** | Fire-and-forget audit event logger with 3x exponential backoff retry | [governanceSidecar.js](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/backend/src/ai/governanceSidecar.js#L106-L160) |
@@ -740,7 +755,7 @@ Normalized multi-service request storage supporting 7 distinct branch service fl
 - **Error Responses**: `400 ERR_INVALID_ACCOUNT_NUMBER`, `404 ERR_ACCOUNT_NOT_FOUND`, `503 ERR_SERVICE_UNAVAILABLE`
 
 #### `POST /api/auth/otp/verify`
-- **Purpose**: Verifies 6-digit OTP, issues kiosk JWT, and returns proactive failed transaction summary.
+- **Purpose**: Verifies 6-digit OTP, issues kiosk JWT, and returns proactive failed transaction summary + login agent swarm output.
 - **Request Body**: `{ "account_number": "1000000001", "otp": "123456" }`
 - **Response (200 OK)**:
 ```json
@@ -756,7 +771,11 @@ Normalized multi-service request storage supporting 7 distinct branch service fl
     "pan_linked": false,
     "full_name": "Arjun Sharma"
   },
-  "login_swarm": { ... }
+  "login_swarm": {
+    "watchdog": { "isSuspicious": false, "riskLevel": "LOW" },
+    "advisor": { "offers": [ ... ] },
+    "compliance": { "linking_required": true }
+  }
 }
 ```
 
