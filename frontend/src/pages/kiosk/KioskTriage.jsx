@@ -12,7 +12,7 @@
 //   - QRCodeGenerator key prop forces fresh countdown whenever a new QR is fetched
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   LogOut,
@@ -76,6 +76,7 @@ const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
 export default function KioskTriage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // ── DEV BYPASS ─────────────────────────────────────────────────────────────
   // State-based JWT so setting it triggers a re-render without any navigate call.
@@ -88,35 +89,58 @@ export default function KioskTriage() {
   const accountStatus = location.state?.accountStatus || null;
 
   // Retrieve instant login swarm results (Watchdog AML, Compliance, Advisor Cross-Sell Ad)
-  const rawLoginSwarm = location.state?.loginSwarm || (() => {
-    try {
-      const saved = sessionStorage.getItem('login_swarm');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  })();
-  const loginSwarm = Array.isArray(rawLoginSwarm) ? rawLoginSwarm[0] : rawLoginSwarm;
+  const [loginSwarm, setLoginSwarm] = useState(() => {
+    const raw = location.state?.loginSwarm || (() => {
+      try {
+        const saved = sessionStorage.getItem('login_swarm');
+        return saved ? JSON.parse(saved) : null;
+      } catch { return null; }
+    })();
+    return Array.isArray(raw) ? raw[0] : raw;
+  });
 
-  // If no JWT present, auto-authenticate in dev mode
+  // If no JWT present, boot in dev mode
   const [devBooting, setDevBooting] = useState(!jwt);
 
   useEffect(() => {
-    if (jwt) { setDevBooting(false); return; }
-    (async () => {
-      try {
-        // Single backend call — no OTP email, no race condition
-        const res = await fetch('/api/dev/kiosk-bypass?account_number=1000000001');
-        if (!res.ok) { setDevBooting(false); return; }
-        const data = await res.json();
-        sessionStorage.setItem('kiosk_jwt', data.jwt);
-        setFailedTxSummary(data.failed_tx_summary || null);
-        setJwt(data.jwt);
-      } catch (_) {
-        setDevBooting(false);
+    let activeJwt = jwt || location.state?.jwt || sessionStorage.getItem('kiosk_jwt');
+    if (!activeJwt) {
+      (async () => {
+        try {
+          const res = await fetch('/api/dev/kiosk-bypass?account_number=1000000001');
+          if (!res.ok) return;
+          const data = await res.json();
+          sessionStorage.setItem('kiosk_jwt', data.jwt);
+          setFailedTxSummary(data.failed_tx_summary || null);
+          setJwt(data.jwt);
+          if (data.login_swarm) {
+            sessionStorage.setItem('login_swarm', JSON.stringify(data.login_swarm));
+            setLoginSwarm(data.login_swarm);
+          }
+        } catch (_) {
+          /* ignore */
+        } finally {
+          setDevBooting(false);
+        }
+      })();
+    } else {
+      setDevBooting(false);
+      if (!loginSwarm || !loginSwarm.advisor?.offers) {
+        fetch('/api/auth/login-swarm', {
+          headers: { Authorization: `Bearer ${activeJwt}` },
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((swarmData) => {
+            if (swarmData?.login_swarm) {
+              sessionStorage.setItem('login_swarm', JSON.stringify(swarmData.login_swarm));
+              setLoginSwarm(swarmData.login_swarm);
+            }
+          })
+          .catch(() => {});
       }
-    })();
+    }
   }, []); // eslint-disable-line
 
-  // Once we have a jwt, stop showing the loading screen
   useEffect(() => {
     if (jwt) setDevBooting(false);
   }, [jwt]);
@@ -124,6 +148,7 @@ export default function KioskTriage() {
   useEffect(() => {
     if (location.state?.loginSwarm) {
       sessionStorage.setItem('login_swarm', JSON.stringify(location.state.loginSwarm));
+      setLoginSwarm(location.state.loginSwarm);
     }
   }, [location.state?.loginSwarm]);
 
@@ -311,6 +336,7 @@ export default function KioskTriage() {
   };
 
   const fetchQRCode = async (serviceType = null) => {
+    const validServiceType = typeof serviceType === 'string' ? serviceType : 'PAN_LINK';
     setQrLoading(true);
     setQrExpired(false);
     try {
@@ -320,19 +346,52 @@ export default function KioskTriage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ service_type: serviceType }),
+        body: JSON.stringify({ service_type: validServiceType }),
       });
       if (!res.ok) throw new Error('QR generation failed');
       const data = await res.json();
       setDeepLink(data.deep_link_url);
       setQrKey((k) => k + 1); // force QRCodeGenerator to remount with fresh countdown
       setShowQR(true);
+      setTimeout(() => {
+        const qrEl = document.getElementById('kiosk-qr-panel');
+        if (qrEl) qrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
     } catch (err) {
       console.error('[KioskTriage] QR error:', err);
     } finally {
       setQrLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (jwt && searchParams.get('action') === 'fix_pan' && !showQR) {
+      fetchQRCode('PAN_LINK');
+    }
+  }, [jwt, searchParams]); // eslint-disable-line
+
+  useEffect(() => {
+    if (showQR && deepLink) {
+      const scrollTimer = setTimeout(() => {
+        const qrEl = document.getElementById('kiosk-qr-panel');
+        if (qrEl) {
+          qrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 150);
+      return () => clearTimeout(scrollTimer);
+    }
+  }, [showQR, deepLink, qrKey]);
+
+  useEffect(() => {
+    if (answer || isLoading) {
+      const faqEl = document.getElementById('faq-chat-area');
+      if (faqEl) {
+        faqEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [answer, isLoading]);
 
   // Called by QRCodeGenerator when the 45s countdown reaches 0.
   // Does NOT log out — shows a "Regenerate" button so the user stays in session.
@@ -523,8 +582,9 @@ export default function KioskTriage() {
             {/* Call-to-Action Execution Button */}
             <div className="flex items-center gap-3 pt-1">
               <button
-                onClick={fetchQRCode}
+                onClick={() => fetchQRCode('PAN_LINK')}
                 disabled={qrLoading}
+                data-testid="execute-fix-btn"
                 className="w-full py-3 px-5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-600/25 transition-all cursor-pointer disabled:opacity-50"
               >
                 <Zap className="w-4 h-4 text-amber-200 animate-bounce" />
@@ -607,7 +667,7 @@ export default function KioskTriage() {
 
         {/* ── QR Code Panel (on-demand) ────────────────────────────────────── */}
         {showQR && (
-          <div className="neo-card p-6 flex flex-col items-center text-center">
+          <div id="kiosk-qr-panel" className="neo-card p-6 flex flex-col items-center text-center">
             <div className="flex items-center gap-2 text-blue-600 mb-2">
               <Smartphone className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-widest">Mobile Document Upload</span>
@@ -676,7 +736,7 @@ export default function KioskTriage() {
 
 
         {/* ── FAQ Chat Area ─────────────────────────────────────────────────── */}
-        <div className="neo-card p-5 space-y-4">
+        <div id="faq-chat-area" className="neo-card p-5 space-y-4">
 
           {/* Answer display */}
           <div className="neo-inset rounded-xl p-4 min-h-[100px] flex items-start gap-3">

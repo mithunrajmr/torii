@@ -9,8 +9,7 @@ export default function DocumentUpload() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const serviceType = searchParams.get('service_type');
-
-  if (serviceType) {
+  if (serviceType && serviceType !== 'PAN_LINK') {
     return <DynamicServiceForm token={token} serviceType={serviceType} />;
   }
 
@@ -20,6 +19,12 @@ export default function DocumentUpload() {
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (error) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [error]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];

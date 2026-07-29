@@ -105,6 +105,64 @@ export async function seedPersona(personaId) {
     `;
   }
 
+  // ── Step 5: Sync matching teller tickets ──────────────────────────────────
+  await query`
+    DELETE FROM teller_tickets WHERE account_id = ${accountId}
+  `;
+
+  const ticketConfigs = {
+    PAN_BLOCKED: {
+      status: 'PENDING',
+      document_path: 'pan-documents/demo/pan_arjun_sharma.jpg',
+      ocr_data: { name: 'ARJUN SHARMA', pan_number: 'ARJNS1234A', service_type: 'PAN_LINK' },
+      ai_confidence: 0.93,
+      name_mismatch_score: 0.91,
+      aml_flagged: false,
+    },
+    AML_SMURFER: {
+      status: 'PENDING_MANUAL_REVIEW',
+      document_path: 'pan-documents/demo/pan_ravi_mehta.jpg',
+      ocr_data: { name: 'RAVI MEHTA', pan_number: 'RVMHT9876B', service_type: 'HIGH_VALUE_CLEARANCE' },
+      ai_confidence: 0.88,
+      name_mismatch_score: 0.85,
+      aml_flagged: true,
+    },
+    SIGN_MISMATCH: {
+      status: 'PENDING_MANUAL_REVIEW',
+      document_path: 'pan-documents/demo/pan_priya_nair.jpg',
+      ocr_data: { name: 'PRIYA K NAIR', pan_number: 'PRYNR4567C', service_type: 'ADDRESS_CHANGE' },
+      ai_confidence: 0.71,
+      name_mismatch_score: 0.52,
+      aml_flagged: false,
+    },
+    CLEAN_HNW: {
+      status: 'APPROVED',
+      document_path: 'pan-documents/demo/pan_lohith_gowda.jpg',
+      ocr_data: { name: 'LOHITH G GOWDA', pan_number: 'LHTGW5432E', service_type: 'FULL_KYC' },
+      ai_confidence: 0.98,
+      name_mismatch_score: 0.97,
+      aml_flagged: false,
+    },
+  };
+
+  if (ticketConfigs[personaId]) {
+    const cfg = ticketConfigs[personaId];
+    await query`
+      INSERT INTO teller_tickets (
+        account_id, status, document_path, ocr_data,
+        ai_confidence, name_mismatch_score, aml_flagged
+      ) VALUES (
+        ${accountId},
+        ${cfg.status},
+        ${cfg.document_path},
+        ${JSON.stringify(cfg.ocr_data)},
+        ${cfg.ai_confidence},
+        ${cfg.name_mismatch_score},
+        ${cfg.aml_flagged}
+      )
+    `;
+  }
+
   return {
     account: {
       id: accountId,

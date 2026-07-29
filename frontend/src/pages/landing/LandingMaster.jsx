@@ -11,7 +11,7 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Rocket, Sparkles } from 'lucide-react';
+import { Rocket, Sparkles, Mic } from 'lucide-react';
 import HeroPulseCard from './components/HeroPulseCard.jsx';
 import ToriiMiniLogo from '../../components/ToriiMiniLogo.jsx';
 import ToriiWordmark from '../../components/ToriiWordmark.jsx';
@@ -110,7 +110,16 @@ export default function LandingMaster() {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-[0_4px_12px_rgba(37,99,235,0.4)]"
           >
             <Sparkles className="w-3.5 h-3.5 text-blue-200" />
-            Gemini OCR Lab
+            TORII Vision Lab
+          </Link>
+
+          {/* Voice & Audio Testing Studio Link */}
+          <Link
+            to="/voice-lab"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-[0_4px_12px_rgba(79,70,229,0.4)]"
+          >
+            <Mic className="w-3.5 h-3.5 text-indigo-200" />
+            TORII Voice Lab
           </Link>
 
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">

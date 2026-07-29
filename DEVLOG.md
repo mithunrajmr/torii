@@ -236,6 +236,30 @@ TELLER HITL:    Teller UI → List Pending → Fetch 5-min signed image URL → 
 
 - **Session 21 (Enterprise Multi-Service Platform Expansion):** Expanded TORII into a universal 7-service branch operational platform (`FULL_KYC`, `AADHAAR_LINK`, `PAN_LINK`, `ADDRESS_CHANGE`, `NOMINEE_UPDATE`, `ACCOUNT_UPGRADE`, `HIGH_VALUE_CLEARANCE`). Created DB migration `006_expanded_branch_services.sql` and `SERVICE_REGISTRY` schema (`serviceSchemas.js`). Built `/api/services` API suite (`serviceController.js`). Implemented fuzzy multi-document entity matcher (`entityMatcherAgent.js`). Built `DynamicServiceForm.jsx`, `MultiDocVault.jsx`, and `DigitalSignaturePad.jsx` with 4px Midnight Black ink, high-DPI coordinate scaling, and live preview badge. Fixed mobile deep link parameter routing in `authController.js` and `KioskTriage.jsx`. Updated `tellerController.js` for service-specific account mutations (`ADDRESS_CHANGE`, `NOMINEE_UPDATE`, `AADHAAR_LINK`, `FULL_KYC`), and enhanced Teller `Dashboard.jsx` / `QueueList.jsx` with service badges, dynamic field inspection, and customer signature verification. Fixed Watsonx Orchestrate double-stringified JSON unwrapping in `orchestrateClient.js`. Passed all 19 unit & integration tests 100%.
 
+- **Session 22 (AI Advisor Swarm & Live Recommendation UI Sync):** Fixed fallback recommendation banner bug where static fallback (`Torii Premier Fixed Deposit`, `8.40%`) was rendered instead of live watsonx Orchestrate Advisor AI output (`Fixed Deposit – 12 to 15 Months`, `Hi LOHITH...`). Key fixes:
+  1. Increased `authController.js` login swarm timeout from 8s to 15s so WXO agent calls do not get prematurely discarded by network timeouts.
+  2. Updated `/api/dev/kiosk-bypass` in `index.js` to execute `executeLoginSwarm` so dev mode login also receives live AI recommendations.
+  3. Added `GET /api/auth/login-swarm` endpoint in `authController.js` & `authRoutes.js` for on-demand recommendation fetching.
+  4. Made `loginSwarm` stateful (`useState`) in `KioskTriage.jsx` and added non-blocking background fetch so AI recommendation updates automatically trigger UI re-renders.
+
+- **Session 23 (Gemini Vision OCR & Anti-Fraud Verification Flow Restoration):** Fixed PAN document upload bypass bug where uploaded documents were submitted directly without running Gemini Vision 2.5 Flash OCR (`processVisionOCR`) analysis. Key fixes:
+  1. Updated `submitServiceRequest` in `serviceController.js` to execute Gemini Vision OCR (`processVisionOCR`) on uploaded images before DB insertion. Evaluates clarity score (< 0.80), tampering, scribbles/defacement, specimen cards, and fuzzy name matching against registered account records. Returns `RETAKE_IMAGE` (400) or `MISMATCH_ERROR` (400) with detailed AI verification notices.
+  2. Updated `DocumentUpload.jsx` routing so `PAN_LINK` service type renders the dedicated PAN card camera capture view with interactive "Analyzing Document..." state and retake/mismatch feedback cards.
+
+- **Session 24 (Teller History Auto-Seeding & Dynamic Form Validation Improvements):** Key fixes & enhancements:
+  1. Added `ensureSeedTickets` in `tellerController.js` to automatically populate demo pending and historical audit tickets (`APPROVED` & `REJECTED`) whenever `teller_tickets` table is empty, ensuring the Teller Workstation queue & Audit History tab are never empty.
+  2. Added client-side required document slot validation to `DynamicServiceForm.jsx` to prevent submitting incomplete multi-service forms and provide instant feedback on mobile.
+
+- **Session 25 (Universal Auto-Scroll Fixes for Form Error & QR Generation Views):** Key fixes:
+  1. Added smooth scroll `useEffect` in `DynamicServiceForm.jsx` & `DocumentUpload.jsx` so when a form submission error occurs (e.g. name mismatch or low clarity), the page automatically smooth-scrolls to the top right to the red Notice box.
+  2. Added reactive smooth scroll `useEffect` in `KioskTriage.jsx` for `showQR` / `deepLink` and `answer` so clicking any Branch Operations & Compliance grid button or Quick Action chip automatically smooth-scrolls the window to the generated QR Code panel (`#kiosk-qr-panel`) or FAQ Answer box (`#faq-chat-area`).
+
+- **Session 26 (Mock CBS Sandbox Synchronization & Chaos Interceptor Expansion):** Key fixes & audit:
+  1. Updated `seedPersona` in `seedEngine.js` to automatically sync and create/purge matching `teller_tickets` when a persona is seeded (*PAN Blocked*, *AML Smurfer*, *Sign Mismatch*, *Clean HNW*), ensuring Teller Workstation and Core Banking DB state stay 100% in sync.
+  2. Updated `injectTransaction` in `sandboxController.js` to automatically set `accounts.pan_linked = false` when injecting high-value `ERR_PAN_MISSING_OVER_50K` transactions.
+  3. Updated `seedTickets` in `sandboxController.js` to auto-seed missing personas if called on a fresh database.
+  4. Mounted `chaosInterceptor()` middleware on `/api/mobile` and `/api/services` in `index.js` so chaos latency & HTTP error injection apply across all mobile form and document upload workflows during sandbox stress testing.
+
 ---
 
 ## Pending Tasks / Next Steps
@@ -250,3 +274,8 @@ TELLER HITL:    Teller UI → List Pending → Fetch 5-min signed image URL → 
 8. ~~Deploy Instant Swarm on Kiosk Login & Fast Local FAQ Racing~~ ✅ Done (Session 19). Concurrently executes Watchdog AML, Compliance, and Advisor Cross-Sell agents on OTP verification, rendering instant alerts/ads and racing local KB for FAQ queries.
 9. ~~QR Retry Fix, Vision OCR Resiliency, Audit History Tab & Dynamic Campaign Engine~~ ✅ Done (Session 20). Fixed QR token retry consumption, added Gemini Vision OCR regex fallback, added Teller Audit History tab, and launched dynamic 3-offer rotating campaign carousel.
 10. ~~Enterprise Multi-Service Platform Expansion & E-Signature Pad Upgrade~~ ✅ Done (Session 21). Implemented 7-service branch operational platform, mobile dynamic forms, multi-doc entity matching, digital signature pad, Watsonx JSON unwrap, and Teller multi-service account mutations. Passed 100% test suite.
+11. ~~AI Advisor Swarm & Live Recommendation UI Sync~~ ✅ Done (Session 22). Fixed AI recommendation fallback bug by extending WXO timeout to 15s, adding `/api/auth/login-swarm` endpoint, adding `login_swarm` to `/api/dev/kiosk-bypass`, and making `loginSwarm` stateful in `KioskTriage.jsx`.
+12. ~~Gemini Vision OCR & Anti-Fraud Verification Flow Restoration~~ ✅ Done (Session 23). Integrated Gemini Vision OCR into `/api/services/submit` pipeline for multi-service uploads and restored dedicated PAN camera capture view in `DocumentUpload.jsx`.
+13. ~~Teller History Auto-Seeding & Dynamic Form Validation Improvements~~ ✅ Done (Session 24). Added `ensureSeedTickets` in `tellerController.js` and required document slot validation in `DynamicServiceForm.jsx`.
+14. ~~Universal Auto-Scroll Fixes for Form Error & QR Generation Views~~ ✅ Done (Session 25). Added reactive smooth-scroll `useEffect` hooks in `DynamicServiceForm.jsx`, `DocumentUpload.jsx`, and `KioskTriage.jsx`.
+15. ~~Mock CBS Sandbox Synchronization & Chaos Interceptor Expansion~~ ✅ Done (Session 26). Synced `teller_tickets` on persona seed, automated account state on transaction injection, auto-seeded missing personas in `seedTickets`, and mounted chaosInterceptor on `/api/mobile` & `/api/services`.

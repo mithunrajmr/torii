@@ -34,6 +34,9 @@ const OcrDemoPage = lazy(() => import('../pages/ocr/OcrDemoPage.jsx'));
 // Debug workspace (Isolated Debug & Validation Console)
 const AgentDebugConsole = lazy(() => import('../pages/debug/AgentDebugConsole.jsx'));
 
+// Isolated Voice & Audio Testing Studio
+const VoiceTestPage = lazy(() => import('../pages/voice/VoiceTestPage.jsx'));
+
 function WorkspaceLoader() {
   return (
     <div className="min-h-screen bg-[#e8ecf2] flex items-center justify-center">
@@ -77,6 +80,9 @@ export default function AppRoutes() {
 
           {/* Gemini OCR Multimodal Lab (Demo Studio) */}
           <Route path="/ocr-demo" element={<OcrDemoPage />} />
+
+          {/* Isolated Voice & Audio Testing Studio */}
+          <Route path="/voice-lab" element={<VoiceTestPage />} />
 
           {/* Isolated Agent Debug Console */}
           <Route path="/debug/agents" element={<AgentDebugConsole />} />

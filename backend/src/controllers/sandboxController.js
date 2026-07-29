@@ -124,6 +124,14 @@ export async function injectTransaction(req, res) {
       VALUES (${txId}, ${accountId}, ${parsedAmount}, ${error_code}, ${createdAt})
     `;
 
+    if (error_code === 'ERR_PAN_MISSING_OVER_50K') {
+      await query`
+        UPDATE accounts
+        SET pan_linked = false
+        WHERE id = ${accountId}
+      `;
+    }
+
     res.status(201).json({
       message: 'Transaction injected',
       transaction: {

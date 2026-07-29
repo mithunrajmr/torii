@@ -199,8 +199,8 @@ export async function runAdvisorAgent(accountId) {
       offers: result.slice(0, 3).map((o, idx) => ({
         id: `offer-${idx + 1}`,
         badge: o.badge || 'EXCLUSIVE OFFER',
-        title: String(o.title || `Personalized Offer for ${firstName}`).slice(0, 60),
-        offer: String(o.offer || `${firstName}, discover banking products tailored specifically for your account.`).slice(0, 150),
+        title: String(o.title || `Personalized Offer for ${firstName}`).slice(0, 100),
+        offer: String(o.offer || `${firstName}, discover banking products tailored specifically for your account.`).slice(0, 250),
         cta: o.cta || 'Apply Now',
         type: o.type || 'FD',
       }))

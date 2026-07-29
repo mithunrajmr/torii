@@ -33,6 +33,12 @@ export default function DynamicServiceForm({ token, serviceType = 'FULL_KYC' }) 
     })();
   }, [serviceType]);
 
+  useEffect(() => {
+    if (error) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [error]);
+
   const handleInputChange = (fieldId, value) => {
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
   };
@@ -44,6 +50,15 @@ export default function DynamicServiceForm({ token, serviceType = 'FULL_KYC' }) 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (submitting) return;
+
+    // Validate required document uploads
+    if (config?.documentSlots) {
+      const missingRequired = config.documentSlots.filter((slot) => slot.required && !files[slot.id]);
+      if (missingRequired.length > 0) {
+        setError(`Please upload all required documents: ${missingRequired.map((s) => s.label).join(', ')}.`);
+        return;
+      }
+    }
 
     // Validate signature if required
     if (config?.requiresSignature && !signatureData) {

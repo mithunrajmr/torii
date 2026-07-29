@@ -120,6 +120,8 @@ app.get('/api/health', async (req, res) => {
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/auth', chaosInterceptor());
   app.use('/api/kiosk', chaosInterceptor());
+  app.use('/api/mobile', chaosInterceptor());
+  app.use('/api/services', chaosInterceptor());
 }
 
 // API Routes
@@ -232,10 +234,18 @@ if (process.env.NODE_ENV !== 'production') {
       // Create Redis session
       await createKioskSession(account.id, jti);
 
+      // Run instant Agent Swarm on dev bypass
+      const { executeLoginSwarm } = await import('./ai/swarmOrchestrator.js');
+      const login_swarm = await executeLoginSwarm(account.id).catch((err) => {
+        console.warn('[dev/kiosk-bypass] executeLoginSwarm failed:', err.message);
+        return null;
+      });
+
       res.json({
         jwt: token,
         failed_tx_summary,
         account_number,
+        login_swarm,
         note: 'Dev bypass — single call, no email. Never use in production.',
       });
     } catch (err) {

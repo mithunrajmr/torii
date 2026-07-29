@@ -53,8 +53,7 @@ export default function SectionGRadar({ refreshKey = 0 }) {
   }, [refreshKey, fetchLedger]);
 
   function handleExecuteFix() {
-    if (!failures.length) return;
-    const first = failures[0];
+    const first = failures[0] || {};
     const account = first.account_number ?? first.account ?? first.accountNumber ?? '1000000001';
     localStorage.setItem('target_account', account);
     setExecuting(true);

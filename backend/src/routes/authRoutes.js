@@ -19,6 +19,7 @@ import {
   validateSession,
   deleteSession,
   staffLogin,
+  getLoginSwarm,
 } from '../controllers/authController.js';
 
 const router = Router();
@@ -31,6 +32,7 @@ router.post('/staff-login', staffLogin);   // teller/staff login → TELLER JWT
 // ── Protected endpoints (CUSTOMER) ───────────────────────────────────────────
 router.post('/qr/generate', requireRole('CUSTOMER'), generateQRToken);
 router.get('/session/validate', requireRole('CUSTOMER'), validateSession);
+router.get('/login-swarm', requireRole('CUSTOMER'), getLoginSwarm);
 router.delete('/session', requireRole('CUSTOMER'), deleteSession);
 
 export default router;

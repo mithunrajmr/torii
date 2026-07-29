@@ -327,12 +327,12 @@ export default function OcrDemoPage() {
             {loading ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                Processing with Gemini 2.5 Flash…
+                Processing with TORII Vision AI…
               </>
             ) : (
               <>
                 <Sparkles className="w-5 h-5 text-blue-300" />
-                Run Gemini Multimodal OCR Analysis
+                Run TORII Vision AI Analysis
               </>
             )}
           </button>
@@ -355,7 +355,7 @@ export default function OcrDemoPage() {
               <Cpu className="w-12 h-12 text-slate-700 mb-4 animate-bounce" />
               <h3 className="text-base font-bold text-slate-400">Ready for Multimodal OCR</h3>
               <p className="text-xs text-slate-500 max-w-sm mt-1">
-                Upload a document image or select a preset on the left, then click analyze to view real-time Gemini extraction output.
+                Upload a document image or select a preset on the left, then click analyze to view real-time TORII Vision AI extraction output.
               </p>
             </div>
           )}
@@ -365,7 +365,7 @@ export default function OcrDemoPage() {
               <div className="w-14 h-14 rounded-full border-4 border-blue-500/30 border-t-blue-400 animate-spin mb-4" />
               <h3 className="text-base font-bold text-blue-300">Analyzing Document Multimodally</h3>
               <p className="text-xs text-blue-400/80 max-w-sm mt-1">
-                Gemini is extracting fields, checking alphanumeric confusions, and enforcing Aadhaar privacy rules…
+                TORII Vision AI is extracting fields, checking alphanumeric confusions, and enforcing Aadhaar privacy rules…
               </p>
             </div>
           )}

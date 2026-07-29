@@ -90,10 +90,40 @@ export async function getFaqGaps(req, res) {
   }
 }
 
+async function ensureSeedTickets() {
+  try {
+    const countResult = await query`SELECT COUNT(*) as total FROM teller_tickets`;
+    const total = parseInt(countResult[0]?.total || '0', 10);
+    if (total === 0) {
+      const accRows = await query`SELECT id, account_number FROM accounts LIMIT 5`;
+      if (accRows.length > 0) {
+        const acc1 = accRows.find((a) => a.account_number === '1000000001') || accRows[0];
+        const acc2 = accRows.find((a) => a.account_number === '1000000002') || accRows[1] || acc1;
+        const acc3 = accRows.find((a) => a.account_number === '1000000004') || accRows[2] || acc1;
+        const acc4 = accRows.find((a) => a.account_number === '1000000008') || accRows[3] || acc1;
+
+        await query`
+          INSERT INTO teller_tickets (
+            account_id, status, document_path, ocr_data, ai_confidence, name_mismatch_score, aml_flagged
+          ) VALUES
+            (${acc1.id}, 'PENDING', 'pan-documents/demo/pan_arjun_sharma.jpg', ${JSON.stringify({ name: 'ARJUN SHARMA', pan_number: 'ARJNS1234A', service_type: 'PAN_LINK' })}, 0.93, 0.91, false),
+            (${acc2.id}, 'PENDING_MANUAL_REVIEW', 'pan-documents/demo/pan_ravi_mehta.jpg', ${JSON.stringify({ name: 'RAVI MEHTA', pan_number: 'RVMHT9876B', service_type: 'HIGH_VALUE_CLEARANCE' })}, 0.88, 0.85, true),
+            (${acc3.id}, 'PENDING_MANUAL_REVIEW', 'pan-documents/demo/pan_priya_nair.jpg', ${JSON.stringify({ name: 'PRIYA K NAIR', pan_number: 'PRYNR4567C', service_type: 'ADDRESS_CHANGE' })}, 0.71, 0.52, false),
+            (${acc4.id}, 'APPROVED', 'pan-documents/demo/pan_lohith_gowda.jpg', ${JSON.stringify({ name: 'LOHITH G GOWDA', pan_number: 'LHTGW5432E', service_type: 'FULL_KYC' })}, 0.98, 0.97, false),
+            (${acc1.id}, 'REJECTED', 'pan-documents/demo/pan_invalid.jpg', ${JSON.stringify({ name: 'UNKNOWN', pan_number: 'INVALID123', service_type: 'NOMINEE_UPDATE' })}, 0.40, 0.10, false)
+        `;
+      }
+    }
+  } catch (err) {
+    console.warn('[tellerController] Seed ticket check failed:', err.message);
+  }
+}
+
 // ── GET /api/teller/tickets ───────────────────────────────────────────────────
 export async function getPendingTickets(req, res) {
   const { status } = req.query;
   try {
+    await ensureSeedTickets();
     const rows = status === 'all'
       ? await query`
           SELECT

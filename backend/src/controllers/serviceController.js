@@ -8,6 +8,8 @@ import { getQRToken, createQRToken } from '../cache/sessionManager.js';
 import { uploadDocument } from '../services/storageService.js';
 import { emitAuthEvent, AuditEventType } from '../ai/governanceSidecar.js';
 import { SERVICE_REGISTRY } from '../config/serviceSchemas.js';
+import { processVisionOCR } from '../ai/visionAgent.js';
+import { matchNames } from '../ai/entityMatcherAgent.js';
 
 function deriveSessionId(qrToken) {
   return crypto.createHash('sha256').update(qrToken).digest('hex').slice(0, 32);
@@ -92,6 +94,50 @@ export async function submitServiceRequest(req, res) {
   }
 
   try {
+    // 0. Fetch account record for entity name matching
+    const accountRows = await query`SELECT full_name FROM accounts WHERE id = ${accountId} LIMIT 1`;
+    const registeredName = accountRows[0]?.full_name || '';
+
+    // 0b. Run Gemini Vision OCR analysis & Quality Gate on uploaded image files
+    const ocrResults = [];
+    if (Array.isArray(files) && files.length > 0) {
+      for (const file of files) {
+        if (file.mimetype.startsWith('image/')) {
+          try {
+            const ocr = await processVisionOCR(file.buffer, file.mimetype);
+            ocrResults.push({ file, ocr });
+
+            // Quality & Anti-Fraud Gate
+            const failedQuality = ocr.clarity_score < 0.80 || ocr.tampering_detected || ocr.is_specimen_or_dummy;
+            if (failedQuality) {
+              const rejectionReason = ocr.rejection_reason || (ocr.clarity_score < 0.80 ? 'IMAGE_CLARITY_BELOW_80_PERCENT' : 'DOCUMENT_DEFACED_OR_INVALID');
+              return res.status(400).json({
+                error: 'RETAKE_IMAGE',
+                message: `Verification rejected by TORII Vision AI: ${rejectionReason}. Please retake a clear photo.`,
+                confidence: ocr.clarity_score,
+                tampering_detected: Boolean(ocr.tampering_detected),
+                rejection_reason: rejectionReason,
+              });
+            }
+
+            // Name Match Gate
+            if (ocr.name && ocr.name !== 'UNKNOWN' && registeredName) {
+              const nameMatchScore = matchNames(ocr.name, registeredName);
+              if (nameMatchScore < 0.50) {
+                return res.status(400).json({
+                  error: 'MISMATCH_ERROR',
+                  message: `The name on the document ('${ocr.name}') does not match account record ('${registeredName}'). Please present ID to a bank teller.`,
+                  name_match_score: nameMatchScore,
+                });
+              }
+            }
+          } catch (ocrErr) {
+            console.warn('[serviceController] Gemini Vision OCR skipped/fallback:', ocrErr.message);
+          }
+        }
+      }
+    }
+
     // 1. Process digital signature if uploaded
     let digitalSignaturePath = null;
     if (signature && typeof signature === 'string' && signature.startsWith('data:image')) {
@@ -133,11 +179,13 @@ export async function submitServiceRequest(req, res) {
 
     const serviceRequest = requestRows[0];
 
-    // 3. Process uploaded document files
+    // 3. Process uploaded document files with real OCR scores
     const documentRecords = [];
     if (Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         const slotId = file.fieldname || 'document';
+        const ocrData = ocrResults[i]?.ocr || {};
         let docPath;
         try {
           docPath = await uploadDocument(
@@ -159,7 +207,7 @@ export async function submitServiceRequest(req, res) {
             ${serviceRequest.id},
             ${slotId},
             ${docPath},
-            0.95
+            ${ocrData.clarity_score ?? 0.95}
           )
           RETURNING id, document_type, document_path
         `;
@@ -168,6 +216,7 @@ export async function submitServiceRequest(req, res) {
     }
 
     // 4. Also insert into legacy teller_tickets table for complete backward compatibility!
+    const primaryOcr = ocrResults[0]?.ocr || {};
     const primaryDocPath = documentRecords[0]?.document_path || digitalSignaturePath || 'N/A';
     const legacyTicketRows = await query`
       INSERT INTO teller_tickets (
@@ -181,8 +230,16 @@ export async function submitServiceRequest(req, res) {
         ${accountId},
         'PENDING',
         ${primaryDocPath},
-        ${JSON.stringify({ service_type, ...formData })},
-        0.95,
+        ${JSON.stringify({
+          service_type,
+          name: primaryOcr.name || null,
+          pan_number: primaryOcr.pan_number || null,
+          id_type: primaryOcr.id_type || null,
+          id_number: primaryOcr.id_number || null,
+          dob: primaryOcr.dob || null,
+          ...formData
+        })},
+        ${primaryOcr.confidence ?? 0.95},
         ${sessionId}
       )
       RETURNING id

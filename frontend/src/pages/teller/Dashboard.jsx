@@ -338,7 +338,7 @@ export default function Dashboard() {
 
                     return (
                       <div className="space-y-3">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Gemini Vision OCR Verification Output</h4>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">TORII Vision AI Verification Output</h4>
                         
                         <div className="neo-inset p-4 rounded-2xl space-y-2 text-xs">
                           <div className="flex justify-between py-1 border-b border-slate-300">

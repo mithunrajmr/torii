@@ -98,7 +98,6 @@ export function maskAadhaarPrivacy(idNumber, idType) {
  * Evaluate all edge cases (specimens, dummy data, finger/hand obstructions, redacting, scribbles)
  * and enforce strict compliance score caps.
  *
- * @param {Object} data - Raw extraction output from Gemini
  * @returns {{tampering_detected: boolean, rejection_reason: string|null, clarity_score: number, confidence: number, is_specimen_or_dummy: boolean}}
  */
 export function evaluateEdgeCasesAndSpecimens(data) {
@@ -106,19 +105,26 @@ export function evaluateEdgeCasesAndSpecimens(data) {
   const pan = String(data.pan_number || (data.id_type === 'PAN' ? data.id_number : '') || '').toUpperCase().trim();
   const dob = String(data.dob || '').toUpperCase().trim();
   const idNum = String(data.id_number || '').toUpperCase().trim();
+  const idType = String(data.id_type || '').toUpperCase().trim();
+
+  // Strip out valid UIDAI privacy masks (e.g., XXXX-XXXX-1234 or XXXX XXXX 1234) before testing specimen regexes
+  const cleanIdNum = idNum.replace(/X{4}[-\s]?X{4}[-\s]?\d{4}/gi, '').replace(/X{3,4}[-\s]?X{3,4}/gi, '');
+  const cleanName = name.replace(/X{4}[-\s]?X{4}/gi, '');
+
+  const isAadhaarDoc = /AADHAAR|UIDAI/i.test(idType) || /XXXX-XXXX-\d{4}/i.test(idNum);
 
   // Pattern 1: Specimen / Dummy / Masked / Placeholder Data Detection
-  const specimenTextRegex = /\b(X{3,}|A{4,}|0{4,}|SPECIMEN|SAMPLE|TEST|DUMMY|JOHN\s*DOE|XYZ|TEMPLATE)\b/i;
+  const specimenTextRegex = /\b(SPECIMEN|SAMPLE|TEST|DUMMY|JOHN\s*DOE|XYZ|TEMPLATE)\b/i;
   const specimenPanRegex = /^A{5}0{4}[A-Z]$/i; // e.g., AAAAA0000A
   const dummyPanZeroes = /\b[A-Z]{5}0000[A-Z]\b/i; // PAN sequence 0000 is invalid
   const specimenDobRegex = /19XX|20XX|XX\/XX|00\/00/i;
 
-  const isDummyName = specimenTextRegex.test(name) || /^X+[\s_]*X+$/i.test(name);
-  const isDummyPan = specimenPanRegex.test(pan) || dummyPanZeroes.test(pan) || specimenTextRegex.test(pan) || specimenTextRegex.test(idNum);
+  const isDummyName = specimenTextRegex.test(cleanName) || (/^X+[\s_]*X+$/i.test(cleanName) && !isAadhaarDoc);
+  const isDummyPan = specimenPanRegex.test(pan) || dummyPanZeroes.test(pan) || specimenTextRegex.test(pan) || (specimenTextRegex.test(cleanIdNum) && !isAadhaarDoc);
   const isDummyDob = specimenDobRegex.test(dob);
 
   const isSpecimen = Boolean(
-    data.is_specimen_or_dummy ||
+    (data.is_specimen_or_dummy && !isAadhaarDoc) ||
     isDummyName ||
     isDummyPan ||
     isDummyDob ||
@@ -128,7 +134,7 @@ export function evaluateEdgeCasesAndSpecimens(data) {
   if (isSpecimen) {
     return {
       tampering_detected: true,
-      rejection_reason: 'SPECIMEN_OR_DUMMY_DOCUMENT_DETECTED: Contains sample/placeholder data (e.g. XXXXXX, AAAAA0000A, 19XX, or fingerprint placeholder photo)',
+      rejection_reason: 'SPECIMEN_OR_DUMMY_DOCUMENT_DETECTED: Contains sample/placeholder data (e.g. AAAAA0000A or sample watermark). Please retake a clear photo.',
       clarity_score: 0.0,
       confidence: 0.0,
       is_specimen_or_dummy: true,
@@ -171,7 +177,7 @@ export function evaluateEdgeCasesAndSpecimens(data) {
 }
 
 /**
- * Send an image buffer directly to Gemini via Google Gen AI SDK (@google/genai) for multimodal compliance & anti-fraud analysis.
+ * Send an image buffer directly to Gen AI SDK for multimodal compliance & anti-fraud analysis.
  * Evaluates document clarity from a HUMAN BANK COMPLIANCE OFFICER perspective (Specification TORII-VIS-FRAUD-2026).
  *
  * @param {Buffer} fileBuffer  - Raw image bytes
@@ -196,8 +202,8 @@ Analyze the uploaded document image strictly from the perspective of a HUMAN BAN
 CRITICAL COMPLIANCE & ANTI-FRAUD INSPECTION RULES (THINK LIKE A HUMAN BANK TELLER, NOT AN AI RECONSTRUCTION MODEL):
 
 1. SPECIMEN, SAMPLE, DUMMY & CENSORED DOCUMENT DETECTION:
-   - Check if the card is a sample template, specimen, or censored document containing dummy text like "XXXXXX", "AAAAA0000A", "01/01/19XX", "SPECIMEN", "SAMPLE", "TEST", or "DUMMY".
-   - Check if the photo is replaced by a fingerprint icon, silhouette, or blank box, or if the signature line is unsigned/blank.
+   - Check if the card is a sample template, specimen, or censored document containing dummy text like "SPECIMEN", "SAMPLE", "TEST", "DUMMY", or "AAAAA0000A".
+   - NOTE: Official Masked Aadhaar cards (containing XXXX-XXXX-1234) and Black & White official Aadhaar photocopies/E-Aadhaar prints are VALID legal documents, NOT dummy/specimen cards. DO NOT set is_specimen_or_dummy to true for valid Aadhaar cards.
    - IF DUMMY/SPECIMEN DETECTED: set "is_specimen_or_dummy": true, set "tampering_detected": true, set "rejection_reason": "SPECIMEN_OR_DUMMY_DOCUMENT_DETECTED", and set "clarity_score": 0.0.
 
 2. FINGER, HAND & OBJECT OBSTRUCTION:

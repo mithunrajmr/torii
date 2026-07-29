@@ -47,7 +47,7 @@ describe('Landing Showcase → Section G integration', () => {
           json: async () => ({ account: { account_number: '1000000001' } }),
         });
       }
-      if (url.includes('/api/sandbox/ledger')) {
+      if (url.includes('/api/sandbox/ledger') || url.includes('/api/system/radar')) {
         ledgerCallCount++;
         const failures =
           ledgerCallCount === 1
@@ -61,7 +61,7 @@ describe('Landing Showcase → Section G integration', () => {
               ];
         return Promise.resolve({
           ok: true,
-          json: async () => ({ activeFailures: failures }),
+          json: async () => ({ activeFailures: failures, failures }),
         });
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });

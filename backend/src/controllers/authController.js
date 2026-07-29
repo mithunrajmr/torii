@@ -224,7 +224,7 @@ export async function verifyOTP(req, res) {
   //  3. Advisor Cross-Sell Agent (generate offer / ad card for instant popup)
   const [failedTxRes, loginSwarmRes] = await Promise.all([
     withTimeout(fetchFailedTxSummary(account.id), CBS_QUERY_TIMEOUT_MS),
-    withTimeout(executeLoginSwarm(account.id), 8000),
+    withTimeout(executeLoginSwarm(account.id), 15000),
   ]);
 
   const failedTxSummary = failedTxRes?.[0] || null;
@@ -401,4 +401,24 @@ export async function staffLogin(req, res) {
   });
 }
 
-export default { requestOTP, verifyOTP, generateQRToken, validateSession, deleteSession, staffLogin };
+/**
+ * GET /api/auth/login-swarm
+ * Allows kiosk UI to fetch or refresh instant login swarm (Watchdog AML, Compliance, Advisor Cross-Sell)
+ * on demand using the active kiosk JWT.
+ */
+export async function getLoginSwarm(req, res) {
+  const accountId = req.auth?.sub || req.auth?.accountId;
+  if (!accountId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const loginSwarm = await executeLoginSwarm(accountId);
+    return res.json({ login_swarm: loginSwarm });
+  } catch (err) {
+    console.error('[authController] getLoginSwarm failed:', err.message);
+    return res.status(500).json({ error: 'Failed to generate login swarm' });
+  }
+}
+
+export default { requestOTP, verifyOTP, generateQRToken, validateSession, deleteSession, staffLogin, getLoginSwarm };
