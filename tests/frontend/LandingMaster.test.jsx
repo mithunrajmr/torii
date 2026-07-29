@@ -32,7 +32,7 @@ describe('WorkspaceCards', () => {
     );
 
     expect(screen.getByTestId('workspace-kiosk')).toBeInTheDocument();
-    expect(screen.getByTestId('workspace-mobile')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-debug')).toBeInTheDocument();
     expect(screen.getByTestId('workspace-teller')).toBeInTheDocument();
     expect(screen.getByTestId('workspace-sandbox')).toBeInTheDocument();
   });
@@ -45,7 +45,7 @@ describe('WorkspaceCards', () => {
     );
 
     expect(screen.getByLabelText(/Open Kiosk Portal workspace/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Open Mobile PWA workspace/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Open Agent Debug Console workspace/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Open Teller HITL workspace/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Open Dev Sandbox workspace/i)).toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
 // frontend/src/pages/teller/SecureImageDisplay.jsx
 import React, { useState, useEffect } from 'react';
-import { FileImage, Lock, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { FileImage, Lock, ZoomIn, ZoomOut } from 'lucide-react';
+import ToriiGateLoader from '../../components/ToriiGateLoader.jsx';
 
 // Re-use the same token helper as Dashboard — reads from localStorage.
 // The token is written there by Dashboard's getTellerToken() on first render,
@@ -73,7 +74,7 @@ export default function SecureImageDisplay({ ticketId }) {
       <div className="neo-inset p-4 rounded-2xl flex-1 flex items-center justify-center overflow-hidden min-h-[320px] relative">
         {loading ? (
           <div className="text-center space-y-2">
-            <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+            <ToriiGateLoader size={64} className="mx-auto mb-1" />
             <p className="text-xs text-slate-500 font-medium">Generating 5-min Signed Supabase URL...</p>
           </div>
         ) : error ? (

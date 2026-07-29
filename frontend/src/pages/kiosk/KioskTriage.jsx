@@ -44,6 +44,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';
+import ToriiMicroLoader from '../../components/ToriiMicroLoader.jsx';
 import QRCodeGenerator from '../../components/QRCodeGenerator.jsx';
 import VoiceAssistant from '../../components/VoiceAssistant.jsx';
 
@@ -660,14 +661,14 @@ export default function KioskTriage() {
                   className="neo-button flex items-center gap-2 px-4 py-2 text-sm font-bold text-blue-600 rounded-xl disabled:opacity-50"
                 >
                   {qrLoading
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    ? <ToriiMicroLoader size={16} color="#2563eb" />
                     : <RefreshCw className="w-4 h-4" />}
                   <span>{qrLoading ? 'Generating…' : 'Generate New QR'}</span>
                 </button>
               </div>
             ) : (
               <div className="neo-inset rounded-3xl bg-white w-[200px] h-[200px] flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-slate-400 animate-spin" />
+                <ToriiMicroLoader size={28} color="#94a3b8" />
               </div>
             )}
           </div>
@@ -682,8 +683,8 @@ export default function KioskTriage() {
             <MessageCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               {isLoading && (!answer || !answer.text) ? (
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="flex items-center gap-2.5 text-slate-600">
+                  <ToriiMicroLoader size={20} color="#00d1ac" />
                   <span className="text-sm font-medium">Connecting to TORII AI…</span>
                 </div>
               ) : answer ? (
@@ -759,7 +760,7 @@ export default function KioskTriage() {
               "
             >
               {isLoading
-                ? <Loader2 className="w-4 h-4 animate-spin" />
+                ? <ToriiMicroLoader size={16} color="#2563eb" />
                 : <Send className="w-4 h-4" />}
               <span className="hidden sm:block">Ask</span>
             </button>

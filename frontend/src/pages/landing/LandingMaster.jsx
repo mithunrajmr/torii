@@ -13,6 +13,8 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Rocket, Sparkles } from 'lucide-react';
 import HeroPulseCard from './components/HeroPulseCard.jsx';
+import ToriiMiniLogo from '../../components/ToriiMiniLogo.jsx';
+import ToriiWordmark from '../../components/ToriiWordmark.jsx';
 
 import WorkspaceCards from './components/WorkspaceCards.jsx';
 import SectionGRadar from './components/SectionGRadar.jsx';
@@ -58,21 +60,18 @@ export default function LandingMaster() {
 
       {/* ── Top Header Bar ──────────────────────────────────────────────── */}
       <header className="bg-slate-900 text-white px-6 py-3 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center
-                       shadow-[0_4px_12px_rgba(37,99,235,0.5)]"
-            aria-hidden="true"
-          >
-            <span className="text-white font-extrabold text-sm">T</span>
-          </div>
+        <Link to="/" className="flex items-center gap-3 group hover:opacity-90 transition-opacity">
+          <ToriiMiniLogo className="w-10 h-10 group-hover:scale-105 transition-transform" />
           <div>
-            <h1 className="text-base font-extrabold tracking-tight leading-tight">TORII</h1>
+            <h1 className="text-base font-extrabold tracking-tight leading-tight flex items-center">
+              <span className="sr-only">TORII</span>
+              <ToriiWordmark className="h-6 w-auto" fill="white" animated />
+            </h1>
             <p className="text-[10px] text-blue-400 font-semibold tracking-widest uppercase">
               Autonomous Branch Compliance Engine
             </p>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-3">
           {/* One-click demo primer */}
@@ -86,8 +85,8 @@ export default function LandingMaster() {
               primeStatus === 'ok'
                 ? 'bg-emerald-500 text-white shadow-[0_4px_12px_rgba(16,185,129,0.4)]'
                 : primeStatus === 'error'
-                ? 'bg-red-500 text-white'
-                : 'bg-amber-500 hover:bg-amber-400 text-slate-900 shadow-[0_4px_12px_rgba(245,158,11,0.4)]',
+                  ? 'bg-red-500 text-white'
+                  : 'bg-amber-500 hover:bg-amber-400 text-slate-900 shadow-[0_4px_12px_rgba(245,158,11,0.4)]',
               priming ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer',
             ].join(' ')}
           >
@@ -99,10 +98,10 @@ export default function LandingMaster() {
             {primeStatus === 'ok'
               ? '✓ Demo Ready!'
               : primeStatus === 'error'
-              ? '✗ Retry'
-              : priming
-              ? 'Priming…'
-              : '⚡ Prime Demo'}
+                ? '✗ Retry'
+                : priming
+                  ? 'Priming…'
+                  : '⚡ Prime Demo'}
           </button>
 
           {/* Gemini OCR Lab Studio Direct Link */}

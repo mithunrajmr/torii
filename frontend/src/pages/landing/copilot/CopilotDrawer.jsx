@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, X, ShieldCheck, UserCheck, Lock, AlertTriangle, Zap, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ActionChip from './ActionChip.jsx';
+import ToriiWordmark from '../../../components/ToriiWordmark.jsx';
+import ToriiMiniLogo from '../../../components/ToriiMiniLogo.jsx';
+import ToriiMicroLoader from '../../../components/ToriiMicroLoader.jsx';
 
 export default function CopilotDrawer({ onClose }) {
   const navigate = useNavigate();
@@ -178,7 +181,7 @@ export default function CopilotDrawer({ onClose }) {
               }`}
               aria-hidden="true"
             >
-              <span className="font-extrabold text-xs">T</span>
+              <ToriiMiniLogo className="w-5 h-5" />
             </div>
             <span
               className={`absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#e8ecf2] ${
@@ -189,7 +192,11 @@ export default function CopilotDrawer({ onClose }) {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-extrabold text-slate-800">TORII Copilot</p>
+              <div className="flex items-center gap-1">
+                <span className="sr-only">TORII</span>
+                <ToriiWordmark className="h-3.5 w-auto" fill="#0f172a" animated />
+                <span className="text-xs font-extrabold text-slate-800">Copilot</span>
+              </div>
               {jwt ? (
                 <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded border border-emerald-300">
                   AUTH
@@ -315,17 +322,9 @@ export default function CopilotDrawer({ onClose }) {
         {/* Typing indicator */}
         {sending && (
           <div className="flex items-start gap-1.5">
-            <div className="bg-[#e8ecf2] rounded-2xl rounded-bl-sm px-3 py-2 shadow-[3px_3px_6px_#cbced1,-3px_-3px_6px_#ffffff]">
-              <div className="flex gap-1 items-center h-3">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                    aria-hidden="true"
-                  />
-                ))}
-              </div>
+            <div className="bg-[#e8ecf2] rounded-2xl rounded-bl-sm px-3.5 py-2 shadow-[3px_3px_6px_#cbced1,-3px_-3px_6px_#ffffff] flex items-center gap-2">
+              <ToriiMicroLoader size={16} color="#00d1ac" />
+              <span className="text-[11px] font-medium text-slate-600">Connecting to TORII AI…</span>
             </div>
           </div>
         )}

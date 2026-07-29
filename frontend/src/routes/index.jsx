@@ -1,11 +1,15 @@
 // frontend/src/routes/index.jsx
-// All workspaces: /, /kiosk, /mobile/:token, /teller, /sandbox
+// All workspaces: /, /landing, /kiosk, /mobile/:token, /teller, /sandbox
 // Each workspace has its own error boundary so a crash in one never affects another.
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import ToriiPageTransition from '../components/ToriiPageTransition.jsx';
 
-// Landing Hub (root)
+// First page / Cinematic Bloom Portal Splash
+const IntroPortal = lazy(() => import('../pages/intro/IntroPortal.jsx'));
+
+// Landing Hub (/landing)
 const LandingMaster = lazy(() => import('../pages/landing/LandingMaster.jsx'));
 
 // Kiosk workspace
@@ -41,39 +45,44 @@ function WorkspaceLoader() {
 export default function AppRoutes() {
   return (
     <Suspense fallback={<WorkspaceLoader />}>
-      <Routes>
-        {/* Kiosk workspace */}
-        <Route path="/kiosk/login"  element={<KioskLogin />} />
-        <Route path="/kiosk/triage" element={<KioskTriage />} />
-        <Route path="/kiosk"        element={<Navigate to="/kiosk/login" replace />} />
+      <ToriiPageTransition>
+        <Routes>
+          {/* Root — First Page on opening application: Cinematic Torii Bloom Portal */}
+          <Route path="/" element={<IntroPortal />} />
 
-        {/* Mobile workspace — token is the single-use QR token */}
-        <Route path="/mobile/:token"        element={<DocumentUpload />} />
-        <Route path="/mobile/:token/status" element={<StatusPoller />} />
+          {/* Master Landing Hub */}
+          <Route path="/landing" element={<LandingMaster />} />
 
-        {/* Teller workspace */}
-        <Route path="/teller/login"     element={<TellerLogin />} />
-        <Route path="/teller/dashboard" element={<Dashboard />} />
-        <Route path="/teller/accounts"  element={<TellerAccounts />} />
-        <Route path="/teller"           element={<Navigate to="/teller/login" replace />} />
-        <Route path="/teller/*"         element={<Navigate to="/teller/login" replace />} />
+          {/* Kiosk workspace */}
+          <Route path="/kiosk/login"  element={<KioskLogin />} />
+          <Route path="/kiosk/triage" element={<KioskTriage />} />
+          <Route path="/kiosk"        element={<Navigate to="/kiosk/login" replace />} />
 
-        {/* Root — Master Landing Hub */}
-        <Route path="/" element={<LandingMaster />} />
+          {/* Mobile workspace — token is the single-use QR token */}
+          <Route path="/mobile/:token"        element={<DocumentUpload />} />
+          <Route path="/mobile/:token/status" element={<StatusPoller />} />
 
-        {/* Mobile workspace root (no token — show placeholder) */}
-        <Route path="/mobile" element={<Navigate to="/kiosk" replace />} />
+          {/* Teller workspace */}
+          <Route path="/teller/login"     element={<TellerLogin />} />
+          <Route path="/teller/dashboard" element={<Dashboard />} />
+          <Route path="/teller/accounts"  element={<TellerAccounts />} />
+          <Route path="/teller"           element={<Navigate to="/teller/login" replace />} />
+          <Route path="/teller/*"         element={<Navigate to="/teller/login" replace />} />
 
-        {/* Sandbox control plane — visible in all envs for demo purposes */}
-        <Route path="/sandbox" element={<SandboxDashboard />} />
+          {/* Mobile workspace root (no token — show placeholder) */}
+          <Route path="/mobile" element={<Navigate to="/kiosk" replace />} />
 
-        {/* Gemini OCR Multimodal Lab (Demo Studio) */}
-        <Route path="/ocr-demo" element={<OcrDemoPage />} />
+          {/* Sandbox control plane — visible in all envs for demo purposes */}
+          <Route path="/sandbox" element={<SandboxDashboard />} />
 
-        {/* Isolated Agent Debug Console */}
-        <Route path="/debug/agents" element={<AgentDebugConsole />} />
-        <Route path="/debug"        element={<Navigate to="/debug/agents" replace />} />
-      </Routes>
+          {/* Gemini OCR Multimodal Lab (Demo Studio) */}
+          <Route path="/ocr-demo" element={<OcrDemoPage />} />
+
+          {/* Isolated Agent Debug Console */}
+          <Route path="/debug/agents" element={<AgentDebugConsole />} />
+          <Route path="/debug"        element={<Navigate to="/debug/agents" replace />} />
+        </Routes>
+      </ToriiPageTransition>
     </Suspense>
   );
 }

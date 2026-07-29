@@ -3,6 +3,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import ToriiWordmark from '../../components/ToriiWordmark.jsx';
 import {
   Upload,
   Sparkles,
@@ -195,7 +196,10 @@ export default function OcrDemoPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-extrabold tracking-tight text-white">TORII</h1>
+              <h1 className="text-xl font-extrabold tracking-tight text-white flex items-center">
+                <span className="sr-only">TORII</span>
+                <ToriiWordmark className="h-7 w-auto" fill="white" animated />
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-xs font-semibold flex items-center gap-1">
                 <Sparkles className="w-3 h-3 animate-pulse" /> Gemini 2.5 Multimodal Lab
               </span>

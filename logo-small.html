@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Torii Gate Loading Logo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0f19;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Adjust these dimensions to resize the entire loader */
+    .loader-container {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .loader-svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    /* 1. Continuous Breathing Glow for the Gate */
+    @keyframes loader-pulse {
+      0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 5px rgba(0, 212, 170, 0.3));
+      }
+      50% {
+        transform: scale(1.04);
+        filter: drop-shadow(0 0 18px rgba(0, 212, 170, 0.85));
+      }
+    }
+    .pulsing-gate {
+      transform-origin: 400px 320px;
+      animation: loader-pulse 2s ease-in-out infinite;
+    }
+
+    /* 2. Infinite Checkmark Draw & Erase Loop */
+    @keyframes loop-check {
+      0% { stroke-dashoffset: 60; opacity: 0; }
+      20% { stroke-dashoffset: 0; opacity: 1; }
+      70% { stroke-dashoffset: 0; opacity: 1; }
+      100% { stroke-dashoffset: -60; opacity: 0; }
+    }
+    .loading-check {
+      stroke-dasharray: 60;
+      stroke-dashoffset: 60;
+      animation: loop-check 2s cubic-bezier(0.65, 0, 0.45, 1) infinite;
+    }
+
+    /* 3. Portal Light Pulse */
+    @keyframes portal-light {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.8; }
+    }
+    .portal-bg {
+      animation: portal-light 2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+<div class="loader-container">
+  <!-- Tightly cropped viewBox removes dead space -->
+  <svg class="loader-svg" viewBox="100 80 600 480" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="mainGradient" x1="5%" y1="0%" x2="95%" y2="0%">
+        <stop offset="0%" stop-color="#0951d3" />
+        <stop offset="45%" stop-color="#00a3da" />
+        <stop offset="100%" stop-color="#00d1ac" />
+      </linearGradient>
+      <linearGradient id="archGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#72eee0" stop-opacity="0.8" />
+        <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1" />
+      </linearGradient>
+    </defs>
+
+    <!-- CENTER PORTAL GLOW -->
+    <path class="portal-bg" d="M 310,520 L 310,340 C 310,280 350,250 400,250 C 450,250 490,280 490,340 L 490,520 Z" fill="url(#archGradient)" />
+    <path d="M 340,500 L 340,350 C 340,300 365,280 400,280 C 435,280 460,300 460,350 L 460,500 Z" fill="#ffffff" opacity="0.9" />
+
+    <!-- TORII GATE -->
+    <g class="pulsing-gate" fill="url(#mainGradient)">
+      <polygon points="190,190 250,190 230,550 170,550" />
+      <polygon points="550,190 610,190 630,550 570,550" />
+      <rect x="150" y="235" width="500" height="36" rx="4" />
+      <path d="M 120,150 L 680,150 L 670,185 L 130,185 Z" />
+      <path d="M 70,85 C 260,145 540,145 730,85 C 705,130 685,140 670,155 L 130,155 C 115,140 95,130 70,85 Z" />
+    </g>
+
+    <!-- CENTER LOOPING CHECKMARK -->
+    <circle cx="400" cy="390" r="28" fill="none" stroke="#00d1ac" stroke-width="8" opacity="0.3" />
+    <polyline class="loading-check" points="385,390 395,400 418,377" fill="none" stroke="#00d1ac" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+</div>
+
+</body>
+</html>
