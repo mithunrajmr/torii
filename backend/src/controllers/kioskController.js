@@ -464,11 +464,11 @@ export async function handlePublicCopilotQuery(req, res) {
     }
 
     // Check FAQ RAG agent for general queries
-    let faqResponseText = voiceResponse;
+    let faqResponseText = null;
     try {
       const { askFaqAgent } = await import('../ai/faqAgent.js');
       const faqResult = await askFaqAgent(rawText);
-      if (faqResult && faqResult.confident && faqResult.answer) {
+      if (faqResult && faqResult.answer) {
         faqResponseText = faqResult.answer;
       }
     } catch (faqErr) {
@@ -477,9 +477,15 @@ export async function handlePublicCopilotQuery(req, res) {
 
     const mapped = INTENT_RESPONSES[intent] ?? INTENT_RESPONSES.GENERAL_TRIAGE;
 
+    const finalAnswer = (faqResponseText && !/let me look that up/i.test(faqResponseText))
+      ? faqResponseText
+      : (voiceResponse && !/let me look that up/i.test(voiceResponse) ? voiceResponse : mapped.response);
+
     return res.json({
       authenticated: false,
-      response: faqResponseText ?? mapped.response,
+      response: finalAnswer,
+      voiceResponse: finalAnswer,
+      faqAnswer: finalAnswer,
       actionChip: mapped.actionChip ?? (authenticatedAccount
         ? { label: 'Go to Kiosk Triage', route: '/kiosk/triage' }
         : { label: '🔑 Log In to Solve Account Issues', route: '/kiosk/login' }),

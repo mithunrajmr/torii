@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Camera, Upload, AlertCircle, RefreshCw, ShieldCheck, CheckCircle } from 'lucide-react';
 import ToriiLogo from '../../components/ToriiLogo.jsx';

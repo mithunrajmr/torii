@@ -34,6 +34,9 @@ const OcrDemoPage = lazy(() => import('../pages/ocr/OcrDemoPage.jsx'));
 // Debug workspace (Isolated Debug & Validation Console)
 const AgentDebugConsole = lazy(() => import('../pages/debug/AgentDebugConsole.jsx'));
 
+// Interactive Presentation Slide Deck (Hackathon Pitch Studio)
+const PresentationDeck = lazy(() => import('../pages/presentation/PresentationDeck.jsx'));
+
 // Isolated Voice & Audio Testing Studio
 const VoiceTestPage = lazy(() => import('../pages/voice/VoiceTestPage.jsx'));
 
@@ -55,6 +58,10 @@ export default function AppRoutes() {
 
           {/* Master Landing Hub */}
           <Route path="/landing" element={<LandingMaster />} />
+
+          {/* Presentation Slide Deck Page */}
+          <Route path="/presentation" element={<PresentationDeck />} />
+          <Route path="/ppt"          element={<Navigate to="/presentation" replace />} />
 
           {/* Kiosk workspace */}
           <Route path="/kiosk/login"  element={<KioskLogin />} />

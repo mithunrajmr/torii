@@ -32,7 +32,7 @@ async function generateGeminiJSON(prompt) {
   if (!apiKey) return null;
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
     const response = await ai.models.generateContent({
       model,
       contents: [{ text: prompt + '\nIMPORTANT: Return ONLY a raw JSON payload with zero extra text or markdown formatting.' }],

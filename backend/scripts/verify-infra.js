@@ -127,7 +127,7 @@ async function checkSupabaseStorage() {
 async function checkGemini() {
   section('Google Gemini Flash');
   const apiKey = process.env.GEMINI_API_KEY;
-  const model  = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const model  = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 
   if (!apiKey) {
     fail('Gemini', 'GEMINI_API_KEY not set');

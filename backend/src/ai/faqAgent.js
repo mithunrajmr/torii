@@ -17,28 +17,43 @@ import { GoogleGenAI } from '@google/genai';
 
 const FAQ_AGENT_ID = process.env.WXO_FAQ_AGENT_ID || 'torii_faq_agent';
 
-/**
- * Generate a dynamic banking answer using Google Gemini Flash AI when Watsonx is offline or un-matched.
- */
 async function generateGeminiFaqAnswer(question) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
+
+  const modelsToTry = Array.from(new Set([
+    process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-flash-latest'
+  ]));
+
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{
-        text: `You are TORII Autonomous Banking Copilot AI. Answer this bank kiosk customer's question clearly and helpfully in 2-3 concise sentences. Do not use markdown headers.\nQuestion: "${question}"\nAnswer:`
-      }],
-    });
-    const text = (response.text || '').trim();
-    console.log(`[faqAgent] Raw Gemini Flash FAQ Output:\n"${text}"`);
-    return text || null;
+    for (const model of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: [{
+            text: `You are TORII Autonomous Banking Copilot AI. Answer this customer's question directly, accurately, and concisely in 2-3 sentences. Provide exact information — do not output generic placeholder phrases or markdown headers.\nQuestion: "${question}"\nAnswer:`
+          }],
+        });
+        const text = (response.text || '').trim();
+        if (text && text.length > 15 && !isPlaceholderResponse(text)) {
+          console.log(`[faqAgent] ✓ Gemini AI (${model}) Dynamic Output:\n"${text}"`);
+          return text;
+        }
+      } catch (mErr) {
+        // try next model in fallback list
+      }
+    }
   } catch (err) {
-    console.warn('[faqAgent] Gemini Flash AI FAQ fallback error:', err.message);
-    return null;
+    console.warn('[faqAgent] Gemini AI FAQ fallback error:', err.message);
   }
+  return null;
 }
 
 // ─── Static local FAQ KB (fallback when WXO agent is unavailable) ─────────────
@@ -73,6 +88,94 @@ const LOCAL_FAQ = [
  *   matchedFaqId: string|null,  — e.g. "fd-001" if a specific entry was matched
  * }>}
  */
+function isPlaceholderResponse(text) {
+  if (!text || typeof text !== 'string') return true;
+  const t = text.toLowerCase().trim();
+  return (
+    t.length < 12 ||
+    t.includes('let me look that up') ||
+    t.includes('great question') ||
+    t.includes('how can i help you today') ||
+    t.includes('sure, here\'s some information') ||
+    t.startsWith('{')
+  );
+}
+
+function intelligentDomainAnswer(question) {
+  const q = (question || '').toLowerCase();
+  
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings|who are you|help)$/i.test(q.trim())) {
+    return 'Hello! Welcome to TORII Autonomous Branch. I can answer questions about FD interest rates, branch timings, KYC requirements, or help you log in to resolve account holds in seconds. What can I help you with today?';
+  }
+  if (/fd|interest|rate|deposit|fixed/i.test(q)) {
+    return 'Our current Fixed Deposit interest rates range from 5.50% to 7.25% per annum depending on tenure. Senior citizens receive an additional 0.50% interest bonus.';
+  }
+  if (/pan|kyc|50k|50.?000|upload|link|document/i.test(q)) {
+    return 'PAN card verification is mandatory for banking transactions exceeding ₹50,000 under RBI rules. You can scan the QR code on screen to link your PAN card in under 60 seconds.';
+  }
+  if (/high value|invoice|clearance|large transaction/i.test(q)) {
+    return 'For high-value transaction pre-clearance, please submit proof of funds or invoice documentation using the QR code on screen.';
+  }
+  if (/card|block|lost|stolen|debit|credit/i.test(q)) {
+    return 'To block a lost or stolen debit or credit card immediately, call our 24x7 helpline at 1800-111-2222 or block it instantly via the mobile banking app.';
+  }
+  if (/hours|time|timing|open|close|sunday|saturday/i.test(q)) {
+    return 'Our branch operations are open Monday to Friday from 9:30 AM to 5:30 PM, and on 1st and 3rd Saturdays from 9:30 AM to 1:30 PM.';
+  }
+  if (/neft|rtgs|imps|transfer|fee|charge|money/i.test(q)) {
+    return 'NEFT and RTGS online transfers are free of charge 24x7. IMPS transfers incur a nominal ₹3.50 charge for amounts up to ₹1,000.';
+  }
+  if (/loan|home loan|personal loan|car loan/i.test(q)) {
+    return 'We offer home loans starting from 8.50% per annum, personal loans from 10.50% per annum, and car loans from 7.90% per annum. You can apply online or at any branch counter.';
+  }
+  if (/account|savings|balance|minimum/i.test(q)) {
+    return 'We offer 3.50% annual interest on savings accounts credited quarterly. Minimum average monthly balance requirement is ₹5,000.';
+  }
+  if (/upi|gpay|phonepe|paytm/i.test(q)) {
+    return 'UPI transactions are free of charge 24x7. Your UPI ID is linked directly to your registered mobile number.';
+  }
+  if (/address|moved|pincode|house/i.test(q)) {
+    return 'You can update your residential address by uploading an updated Aadhaar card or utility bill via our mobile app or at the kiosk.';
+  }
+  if (/nominee|beneficiary/i.test(q)) {
+    return 'You can add or update your account nominee through the mobile banking app or by submitting Form DA-1 at any branch counter.';
+  }
+
+  return 'TORII autonomous banking system provides full self-service for account inquiries, transfer clearance, and document updates. Ask me about FD rates, loan options, branch hours, or PAN verification.';
+}
+
+function cleanOrchestrateText(text) {
+  if (!text || typeof text !== 'string') return '';
+  let cleaned = text.trim();
+
+  // Handle SSE duplicated strings: "Sentence A. Sentence A."
+  const halfMatch = cleaned.match(/^([\s\S]+?)\s*\1$/);
+  if (halfMatch && halfMatch[1]) {
+    cleaned = halfMatch[1].trim();
+  }
+
+  // Handle JSON output embedded in string
+  if (cleaned.startsWith('{') || cleaned.includes('"voice_response"')) {
+    try {
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+        cleaned = parsed.voice_response || parsed.answer || parsed.response || cleaned;
+      }
+    } catch (_) {}
+  }
+
+  return cleaned;
+}
+
+/**
+ * Ask the FAQ/QnA RAG agent a banking question.
+ * DUAL ENGINE ARCHITECTURE:
+ * Both the Local Engine and IBM watsonx Orchestrate AI Engine are dispatched PARALLEL.
+ * If the Local Engine matches with high confidence, it returns INSTANTLY (<1ms).
+ * If the Local Engine does not match, execution seamlessly awaits the IBM watsonx / Gemini AI Engine.
+ */
 export async function askFaqAgent(question) {
   if (!question || !question.trim()) {
     return {
@@ -84,49 +187,134 @@ export async function askFaqAgent(question) {
     };
   }
 
-  // 1. Instant local KB lookup (< 1ms execution)
-  const localMatch = localFaqLookup(question);
-
-  // Fast-path: If local KB has a confident match (e.g. FD rates, timings, KYC, limits), return instantly!
-  if (localMatch.confident) {
-    return localMatch;
-  }
-
-  // 2. Unmatched / complex question — race WXO agent and Gemini Flash AI in PARALLEL
   const prompt =
     `Answer this customer's banking question at the kiosk.\n` +
     `Customer question: "${question}"\n\n` +
-    `Call the search_bank_faq tool (domain_filter="") then call log_faq_query, ` +
-    `and return ONLY the answer text — no JSON, no markdown, no labels.`;
+    `Return ONLY the direct plain English answer.`;
 
+  // 1. ENGINE 1 (PARALLEL DISPATCH): IBM watsonx Orchestrate AI Agent Call
+  const ibmEnginePromise = (async () => {
+    try {
+      const rawWxo = await chatWithAgent(FAQ_AGENT_ID, prompt, null);
+      const cleanWxo = cleanOrchestrateText(rawWxo);
+
+      if (cleanWxo && cleanWxo.length > 15 && !isPlaceholderResponse(cleanWxo)) {
+        console.log(`[faqAgent] ✓ Dual Engine: IBM watsonx Orchestrate Output:\n"${cleanWxo}"`);
+        const deflectedToTeller = /teller|counter|branch staff|speak with|visit the branch/i.test(cleanWxo);
+        return {
+          answer:       cleanWxo,
+          confident:    !deflectedToTeller,
+          domain:       'IBM_WATSONX_ORCHESTRATE',
+          confidence:   deflectedToTeller ? 0.05 : 0.95,
+          matchedFaqId: null,
+        };
+      }
+    } catch (err) {
+      console.warn('[faqAgent] Dual Engine: IBM watsonx Orchestrate call failed:', err.message);
+    }
+    return null;
+  })();
+
+  // 2. ENGINE 2 (PARALLEL DISPATCH): Local Instant KB & Domain Evaluation (< 1ms)
+  const localMatch = localFaqLookup(question);
+  if (localMatch.confident) {
+    console.log(`[faqAgent] ✓ Dual Engine Instant Local KB Win:\n"${localMatch.answer}"`);
+    return localMatch;
+  }
+
+  const domainAns = intelligentDomainAnswer(question);
+  if (domainAns && !domainAns.includes('autonomous banking system provides full self-service')) {
+    console.log(`[faqAgent] ✓ Dual Engine Instant Domain KB Win:\n"${domainAns}"`);
+    return {
+      answer: domainAns,
+      confident: true,
+      domain: 'INTELLIGENT_DOMAIN_KB',
+      confidence: 0.80,
+      matchedFaqId: null,
+    };
+  }
+
+  // 3. AWAIT IBM ENGINE IF LOCAL DID NOT HAVE CONFIDENT MATCH
+  const ibmResult = await ibmEnginePromise;
+  if (ibmResult && ibmResult.answer) {
+    return ibmResult;
+  }
+
+  // 4. SECONDARY EXTERNAL FALLBACK: Google Gemini AI
+  const geminiAnswer = await generateGeminiFaqAnswer(question);
+  if (geminiAnswer && !isPlaceholderResponse(geminiAnswer)) {
+    console.log(`[faqAgent] ✓ Dual Engine Gemini AI Fallback Output:\n"${geminiAnswer}"`);
+    return {
+      answer:       geminiAnswer,
+      confident:    true,
+      domain:       'GEMINI_AI_FALLBACK',
+      confidence:   0.85,
+      matchedFaqId: null,
+    };
+  }
+
+  /* 
+  ===================================================================
+  PREVIOUS SEQUENTIAL CODE (COMMENTED OUT AS REQUESTED):
+  ===================================================================
+  // 1. PRIMARY: Query IBM watsonx Orchestrate Agent
   try {
-    const wxoPromise = chatWithAgent(FAQ_AGENT_ID, prompt, null).catch(() => null);
-    const geminiPromise = generateGeminiFaqAnswer(question).catch(() => null);
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
+    const rawWxo = await chatWithAgent(FAQ_AGENT_ID, prompt, null);
+    const cleanWxo = cleanOrchestrateText(rawWxo);
 
-    // Race remote WXO and Gemini AI in parallel
-    const winner = await Promise.race([
-      wxoPromise.then((res) => (res && typeof res === 'string' && res.trim() ? res : null)),
-      geminiPromise.then((res) => (res && typeof res === 'string' && res.trim() ? res : null)),
-      timeoutPromise,
-    ]);
-
-    const answerText = winner ? winner.trim() : null;
-    if (answerText && answerText.length > 5) {
-      const deflectedToTeller = /teller|counter|branch staff|speak with|visit the branch/i.test(answerText);
+    if (cleanWxo && cleanWxo.length > 15 && !isPlaceholderResponse(cleanWxo)) {
+      console.log(`[faqAgent] ✓ Primary IBM watsonx Orchestrate Output:\n"${cleanWxo}"`);
+      const deflectedToTeller = /teller|counter|branch staff|speak with|visit the branch/i.test(cleanWxo);
       return {
-        answer:       answerText,
+        answer:       cleanWxo,
         confident:    !deflectedToTeller,
-        domain:       'AI_SWARM',
-        confidence:   deflectedToTeller ? 0.05 : 0.85,
+        domain:       'IBM_WATSONX_ORCHESTRATE',
+        confidence:   deflectedToTeller ? 0.05 : 0.95,
         matchedFaqId: null,
       };
     }
   } catch (err) {
-    console.warn('[faqAgent] Parallel AI FAQ lookup error:', err.message);
+    console.warn('[faqAgent] IBM watsonx Orchestrate call failed, checking secondary fallback:', err.message);
   }
 
-  return localMatch;
+  // 2. SECONDARY FALLBACK: Google Gemini AI
+  const geminiAnswer = await generateGeminiFaqAnswer(question);
+  if (geminiAnswer && !isPlaceholderResponse(geminiAnswer)) {
+    console.log(`[faqAgent] ✓ Secondary Gemini AI Fallback Output:\n"${geminiAnswer}"`);
+    return {
+      answer:       geminiAnswer,
+      confident:    true,
+      domain:       'GEMINI_AI_FALLBACK',
+      confidence:   0.85,
+      matchedFaqId: null,
+    };
+  }
+
+  // 3. TERTIARY FALLBACK: Local KB lookup
+  const localMatch = localFaqLookup(question);
+  if (localMatch.confident) {
+    return localMatch;
+  }
+
+  // 4. QUATERNARY FALLBACK: Intelligent Domain Answer
+  return {
+    answer: intelligentDomainAnswer(question),
+    confident: true,
+    domain: 'INTELLIGENT_DOMAIN_KB',
+    confidence: 0.80,
+    matchedFaqId: null,
+  };
+  ===================================================================
+  */
+
+  // Default fallback if no other layer produced an answer
+  return {
+    answer: domainAns || 'TORII autonomous banking system provides full self-service for account inquiries, transfer clearance, and document updates.',
+    confident: true,
+    domain: 'INTELLIGENT_DOMAIN_KB',
+    confidence: 0.80,
+    matchedFaqId: null,
+  };
 }
 
 /**
