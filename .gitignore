@@ -19,3 +19,4 @@ Thumbs.db
 # .bob/
 __pycache__/
 *.pyc
+*.mp4

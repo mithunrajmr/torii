@@ -60,18 +60,44 @@ TORII fundamentally alters how retail banking operations function:
 ## Platform Visual Tour
 
 <div align="center">
-  <p><strong>Experience the end-to-end TORII platform in action across autonomous triage, AI copilot interaction, and mobile continuation:</strong></p>
+  <p><strong>A comprehensive visual walkthrough of TORII's production banking triage, AI swarm orchestration, mobile handoff, and human-in-the-loop authorization pipeline:</strong></p>
 </div>
 
-| 🏛️ Master Operations Hub & Section G Radar | 🔐 Self-Service Kiosk Terminal & Auth |
+### 1. Operations Hub & Swarm Telemetry
+| 🏛️ Master Operations Hub & Section G Radar | 🤖 Active AI Swarm Telemetry & Copilot Drawer |
 | :---: | :---: |
-| <a href="screenshot-Torii/landing_page.png"><img src="screenshot-Torii/landing_page.png" alt="Torii Master Operations Hub" width="100%" /></a> | <a href="screenshot-Torii/login_page.png"><img src="screenshot-Torii/login_page.png" alt="Self-Service Kiosk Terminal" width="100%" /></a> |
-| **Unified Command Center**: Live Section G compliance radar, real-time CBS core connectivity, and multi-workspace launchpad for branch managers and tellers. | **Autonomous Kiosk Authentication**: Zero-friction 10-digit PIN pad entry triggering the concurrent multi-agent login swarm for instant background diagnosis. |
+| <a href="screenshot-Torii/landing_page.png"><img src="screenshot-Torii/landing_page.png" alt="Torii Master Operations Hub" width="100%" /></a> | <a href="screenshot-Torii/landing_copilot_assistant.png"><img src="screenshot-Torii/landing_copilot_assistant.png" alt="AI Swarm Telemetry & Copilot Drawer" width="100%" /></a> |
+| **Unified Command Center**: Live CBS core telemetry, multi-workspace routing, and real-time Section G compliance radar tracking branch bottlenecks. | **Interactive AI Copilot**: Public visitor assistant with live AI agent swarm indicators (`AML Watchdog RUN`, `Vision OCR`, `Cross-sell AI`). |
 
-| 🤖 AI Swarm Copilot & Policy Triage | 📲 Encrypted Mobile QR Continuation |
+### 2. Autonomous Kiosk Terminal & Policy Triage
+| 🔐 Kiosk PIN-Pad 2FA Authentication | ⚡ Section G Proactive Triage Radar Alert |
 | :---: | :---: |
-| <a href="screenshot-Torii/FAQ_chat_1.png"><img src="screenshot-Torii/FAQ_chat_1.png" alt="AI Swarm Copilot & FAQ Triage" width="100%" /></a> | <a href="screenshot-Torii/QR_scan_Pan_page.png"><img src="screenshot-Torii/QR_scan_Pan_page.png" alt="Encrypted Mobile QR Handoff" width="100%" /></a> |
-| **Intelligent Triage & Policy Assistant**: Proactive compliance diagnosis with one-click action cards and sub-second dual-track FAQ policy resolution. | **Privacy-Preserving Mobile Continuation**: 10-minute ephemeral QR session transferring sensitive document capture to the customer's personal phone. |
+| <a href="screenshot-Torii/login_page.png"><img src="screenshot-Torii/login_page.png" alt="Self-Service Kiosk Terminal" width="100%" /></a> | <a href="screenshot-Torii/kiosk_proactive_triage_radar.png"><img src="screenshot-Torii/kiosk_proactive_triage_radar.png" alt="Section G Radar Alert" width="100%" /></a> |
+| **Self-Service Kiosk Authentication**: Zero-friction 10-digit PIN pad entry triggering parallel login swarm execution (`Promise.all`). | **Proactive Bottleneck Interception**: Instant diagnosis of Section 139A PAN block with 1-click **Execute Agentic Fix Now** and personalized deposit recommendations. |
+
+### 3. Natural Language Policy FAQ & Advisor Intelligence
+| 💬 Conversational FAQ & Policy Assistant | 🎁 Advisor Agent Pre-Approved Reservation |
+| :---: | :---: |
+| <a href="screenshot-Torii/kiosk_faq_voice_chat.png"><img src="screenshot-Torii/kiosk_faq_voice_chat.png" alt="Kiosk Conversational FAQ" width="100%" /></a> | <a href="screenshot-Torii/advisor_cross_sell_modal.png"><img src="screenshot-Torii/advisor_cross_sell_modal.png" alt="Advisor Agent Reservation" width="100%" /></a> |
+| **Dual-Track Policy Intelligence**: Sub-second natural language answers for RTGS, NEFT, IMPS fees, interest rates, and branch policies. | **Autonomous Value-Add**: Proactive balance tier analysis offering pre-approved fixed deposits with instant RM reservation confirmation. |
+
+### 4. Privacy-Preserving Mobile Continuation & Camera Capture
+| 📲 Encrypted QR Session Handoff | 📸 Torii Secure Mobile Camera Viewfinder |
+| :---: | :---: |
+| <a href="screenshot-Torii/QR_scan_Pan_page.png"><img src="screenshot-Torii/QR_scan_Pan_page.png" alt="Encrypted Mobile QR Handoff" width="100%" /></a> | <a href="screenshot-Torii/mobile_camera_pan_upload.png"><img src="screenshot-Torii/mobile_camera_pan_upload.png" alt="Mobile Camera Capture" width="100%" /></a> |
+| **Zero-Password Smartphone Handoff**: 10-minute ephemeral Redis cryptographic token delegating sensitive KYC capture to personal devices. | **Native Mobile Capture**: Secure browser-based camera capture with real-time AI extraction and streaming progress. |
+
+### 5. Multi-Agent Anti-Fraud Inspection & Live Dispatch
+| 🛡️ Vision OCR Scribble / Tamper Rejection | ⏱️ Real-Time Teller Dispatch Poller |
+| :---: | :---: |
+| <a href="screenshot-Torii/mobile_anti_fraud_rejection.png"><img src="screenshot-Torii/mobile_anti_fraud_rejection.png" alt="Vision OCR Defacement Rejection" width="100%" /></a> | <a href="screenshot-Torii/mobile_status_tracker_dispatch.png"><img src="screenshot-Torii/mobile_status_tracker_dispatch.png" alt="Real-Time Status Tracker" width="100%" /></a> |
+| **Strict Anti-Fraud Quality Gate**: Automatic rejection of scribbles, obstructions, and defacement (`SCRIBBLES_AND_DEFACEMENT_DETECTED`) with instant customer retry guidance. | **Live Continuation Poller**: Real-time status tracker keeping the customer informed while pre-analyzed files route to the branch teller. |
+
+### 6. Human-in-the-Loop (HITL) Authorization & Customer Notification
+| 👨‍💼 HITL Teller Review Workstation | ✉️ Multi-Channel Email Notification Dispatch |
+| :---: | :---: |
+| <a href="screenshot-Torii/teller_hitl_verification.png"><img src="screenshot-Torii/teller_hitl_verification.png" alt="HITL Teller Workstation" width="100%" /></a> | <a href="screenshot-Torii/email_notifications_flow.png"><img src="screenshot-Torii/email_notifications_flow.png" alt="Email Notification Dispatch" width="100%" /></a> |
+| **5-Second Teller Verification**: Pre-extracted Gemini OCR metrics (Clarity 99%, Name Match 100%, Tampering PASSED, Specimen GENUINE) with 1-Click Approve. | **Instant Customer Delivery**: Automated Brevo/SMTP transactional email updates for 2FA OTPs, approval confirmations, and teller notices. |
 
 ---
 
@@ -136,8 +162,8 @@ The kiosk home screen updates instantly:
 - **Bottom Quick-Fix Drawer**: Displays a one-click action card: **"⚡ Link PAN Card Now to Unblock Transfer"**.
 
 <p align="center">
-  <a href="screenshot-Torii/FAQ_chat_1.png"><img src="screenshot-Torii/FAQ_chat_1.png" alt="AI Swarm Copilot & Triage" width="85%" /></a>
-  <br><em>Figure 2: AI Swarm Copilot & Triage — Proactive diagnosis explains the Section 139A block with an instant one-click action card to resolve it.</em>
+  <a href="screenshot-Torii/kiosk_proactive_triage_radar.png"><img src="screenshot-Torii/kiosk_proactive_triage_radar.png" alt="AI Swarm Copilot & Triage" width="85%" /></a>
+  <br><em>Figure 2: AI Swarm Copilot & Triage — Proactive Section G Radar detects the Section 139A block with an instant one-click action card to resolve it.</em>
 </p>
 
 ### Step 3: Encrypted QR Mobile Handoff
@@ -154,14 +180,31 @@ Before any data reaches the teller, TORII's Vision OCR agent executes a strict a
 - **Quality Gating**: If image clarity is `< 0.80`, or if finger obstructions, scribbles, or digital screen capture Moiré patterns are detected, the system rejects the submission (`400 RETAKE_IMAGE`) and prompts Arjun to retake a clear photo.
 - **Data Protection**: Aadhaar numbers are automatically masked (`XXXX-XXXX-1234`), and PAN OCR confusions (e.g. `0` vs `O`) are corrected via `fixPanHeuristics()`.
 
+<p align="center">
+  <a href="screenshot-Torii/mobile_anti_fraud_rejection.png"><img src="screenshot-Torii/mobile_anti_fraud_rejection.png" alt="Vision OCR Anti-Fraud Quality Gate Rejection" width="48%" /></a>
+  <a href="screenshot-Torii/mobile_camera_pan_upload.png"><img src="screenshot-Torii/mobile_camera_pan_upload.png" alt="Torii Secure Mobile Camera Capture" width="48%" /></a>
+  <br><em>Figure 4: Anti-Fraud Gating & Mobile Capture — Left: Vision OCR detects defacement and prompts immediate retry. Right: Clean PAN card photo analyzed in under 1.8 seconds.</em>
+</p>
+
 ### Step 5: HITL Teller Verification & Auto-Learning Feedback Loop
 Once a clean photo is accepted, a review ticket enters the Teller Workspace queue. Teller Sarah sees the pre-extracted document fields, a 91% Levenshtein name match score, and green anti-fraud indicators.
 - Teller Sarah clicks **"Approve"** (`POST /api/teller/action`).
 - The backend mutates the CBS record (`accounts.pan_linked = true`), lifts the transaction hold, dispatches an email notification, and records the outcome in `agent_performance_log`.
 - **Continuous Learning**: If a teller overrides an AI recommendation (`teller_override = true`), TORII's feedback loop records the discrepancy to automatically refine model thresholds over time.
 
+<p align="center">
+  <a href="screenshot-Torii/teller_hitl_verification.png"><img src="screenshot-Torii/teller_hitl_verification.png" alt="HITL Teller Review Workstation" width="85%" /></a>
+  <br><em>Figure 5: HITL Teller Workstation — Tellers review pre-extracted Gemini OCR fields (99% clarity, 100% name match, genuine specimen) and authorize with a single click.</em>
+</p>
+
 ### Step 6: Instant Resolution
 Arjun's mobile phone displays a success confirmation along with personalized offer cards generated by the Advisor agent. Total elapsed time: **under 60 seconds**.
+
+<p align="center">
+  <a href="screenshot-Torii/advisor_cross_sell_modal.png"><img src="screenshot-Torii/advisor_cross_sell_modal.png" alt="Advisor Agent Personalized Reservation" width="48%" /></a>
+  <a href="screenshot-Torii/email_notifications_flow.png"><img src="screenshot-Torii/email_notifications_flow.png" alt="Live Transactional Email Confirmation" width="48%" /></a>
+  <br><em>Figure 6: Instant Customer Resolution — Left: Advisor agent delivers pre-approved high-yield deposit offer. Right: Live email delivery confirms account unblock and transfer completion.</em>
+</p>
 
 ---
 
