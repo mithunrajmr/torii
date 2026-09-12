@@ -13,7 +13,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1.svg)](https://supabase.com)
 [![Redis](https://img.shields.io/badge/Redis-Upstash-DC382D.svg)](https://upstash.com)
 
-[The Vision](#1-the-vision) • [The Name & Meaning](#2-the-name--meaning) • [Before vs After](#3-the-branch-transformation-before-vs-after) • [Quantified Business Value](#4-quantified-business-value) • [Design Principles](#5-enterprise-design-principles) • [The Customer Story](#6-the-customer-story-a-real-world-scenario) • [Architectural Rationales](#7-architectural-rationales-why-was-it-built-this-way) • [Extensibility](#8-why-this-architecture-scales) • [System Architecture](#system-architecture) • [API Reference](#api-documentation)
+[The Vision](#1-the-vision) • [The Name & Meaning](#2-the-name--meaning) • [Before vs After](#3-the-branch-transformation-before-vs-after) • [Platform Visual Tour](#platform-visual-tour) • [Quantified Business Value](#4-quantified-business-value) • [Design Principles](#5-enterprise-design-principles) • [The Customer Story](#6-the-customer-story-a-real-world-scenario) • [Architectural Rationales](#7-architectural-rationales-why-was-it-built-this-way) • [Extensibility](#8-why-this-architecture-scales) • [System Architecture](#system-architecture) • [API Reference](#api-documentation)
 
 </div>
 
@@ -54,6 +54,24 @@ TORII fundamentally alters how retail banking operations function:
 | **Data Processing** | Teller manually keys document data | Parallel AI Swarm extracts, masks, & verifies in < 1.8s |
 | **Staff Workload** | 10 minutes spent on manual verification | Teller verifies pre-analyzed case in under 5 seconds |
 | **Branch Output** | Congested lobbies, high teller burnout | Streamlined operations, 90% cost reduction |
+
+---
+
+## Platform Visual Tour
+
+<div align="center">
+  <p><strong>Experience the end-to-end TORII platform in action across autonomous triage, AI copilot interaction, and mobile continuation:</strong></p>
+</div>
+
+| 🏛️ Master Operations Hub & Section G Radar | 🔐 Self-Service Kiosk Terminal & Auth |
+| :---: | :---: |
+| <a href="screenshot-Torii/landing_page.png"><img src="screenshot-Torii/landing_page.png" alt="Torii Master Operations Hub" width="100%" /></a> | <a href="screenshot-Torii/login_page.png"><img src="screenshot-Torii/login_page.png" alt="Self-Service Kiosk Terminal" width="100%" /></a> |
+| **Unified Command Center**: Live Section G compliance radar, real-time CBS core connectivity, and multi-workspace launchpad for branch managers and tellers. | **Autonomous Kiosk Authentication**: Zero-friction 10-digit PIN pad entry triggering the concurrent multi-agent login swarm for instant background diagnosis. |
+
+| 🤖 AI Swarm Copilot & Policy Triage | 📲 Encrypted Mobile QR Continuation |
+| :---: | :---: |
+| <a href="screenshot-Torii/FAQ_chat_1.png"><img src="screenshot-Torii/FAQ_chat_1.png" alt="AI Swarm Copilot & FAQ Triage" width="100%" /></a> | <a href="screenshot-Torii/QR_scan_Pan_page.png"><img src="screenshot-Torii/QR_scan_Pan_page.png" alt="Encrypted Mobile QR Handoff" width="100%" /></a> |
+| **Intelligent Triage & Policy Assistant**: Proactive compliance diagnosis with one-click action cards and sub-second dual-track FAQ policy resolution. | **Privacy-Preserving Mobile Continuation**: 10-minute ephemeral QR session transferring sensitive document capture to the customer's personal phone. |
 
 ---
 
@@ -107,13 +125,28 @@ Arjun steps up to the branch kiosk terminal and enters his 10-digit account numb
 - **Leg 2 — Compliance Triage Agent**: Checks whether any identity documents (PAN, Aadhaar, CKYC) or compliance holds were triggered in the last 48 hours.
 - **Leg 3 — Advisor Cross-Sell Agent**: Evaluates Arjun's account balance tier to generate personalized, high-value financial offer cards.
 
+<p align="center">
+  <a href="screenshot-Torii/login_page.png"><img src="screenshot-Torii/login_page.png" alt="Kiosk Terminal PIN-pad Authentication" width="85%" /></a>
+  <br><em>Figure 1: Kiosk Terminal Authentication — Arjun enters his 10-digit account number to initiate 2FA OTP verification and trigger the parallel login swarm.</em>
+</p>
+
 ### Step 2: Proactive Dialogue & Bottom Quick-Fix Drawer
 The kiosk home screen updates instantly:
 - **Upper Dialogue Box**: Highlights Arjun's recent failed ₹75,000 transfer, explaining in plain language: *"Welcome Arjun! Your ₹75,000 transaction was blocked under Section 139A because your PAN card is not linked."*
 - **Bottom Quick-Fix Drawer**: Displays a one-click action card: **"⚡ Link PAN Card Now to Unblock Transfer"**.
 
+<p align="center">
+  <a href="screenshot-Torii/FAQ_chat_1.png"><img src="screenshot-Torii/FAQ_chat_1.png" alt="AI Swarm Copilot & Triage" width="85%" /></a>
+  <br><em>Figure 2: AI Swarm Copilot & Triage — Proactive diagnosis explains the Section 139A block with an instant one-click action card to resolve it.</em>
+</p>
+
 ### Step 3: Encrypted QR Mobile Handoff
 Arjun clicks the quick-fix card. The kiosk calls `POST /api/auth/qr/generate`, issuing a single-use 32-byte cryptographically secure QR token (`qr:token:{token}` stored in Redis for 10 minutes). Arjun scans the code with his smartphone camera, opening the Mobile PWA **without re-entering his password**.
+
+<p align="center">
+  <a href="screenshot-Torii/QR_scan_Pan_page.png"><img src="screenshot-Torii/QR_scan_Pan_page.png" alt="Encrypted QR code generated on kiosk for mobile continuation" width="85%" /></a>
+  <br><em>Figure 3: Encrypted Mobile Continuation — Arjun scans the 10-minute ephemeral QR code with his smartphone to securely upload his PAN card.</em>
+</p>
 
 ### Step 4: Intelligent Quality-Gated Document Upload
 Arjun snaps a photo of his PAN card on his phone and submits it (`POST /api/mobile/upload`).
@@ -187,7 +220,7 @@ TORII is designed as a **Workflow-Driven Platform** rather than a service-specif
    └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Adding an 8th or 9th branch service (e.g. *Demat Account Opening* or *Home Loan Pre-Screening*) requires **zero modifications** to the core routing, AI swarm, or teller dashboard code. Developers simply append a new JSON schema object to `serviceSchemas.js`, defining the required input fields and document types. The Mobile PWA automatically renders dynamic input forms ([DynamicServiceForm.jsx](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/frontend/src/pages/mobile/DynamicServiceForm.jsx)) and multi-document upload vaults ([MultiDocVault.jsx](file:///c:/Users/2mrmi/Downloads/IBM%20hackon/frontend/src/pages/mobile/MultiDocVault.jsx)), while the Teller Workspace immediately formats the review modal.
+Adding an 8th or 9th branch service (e.g. *Demat Account Opening* or *Home Loan Pre-Screening*) requires **zero modifications** to the core routing, AI swarm, or teller dashboard code. Developers simply append a new JSON schema object to `serviceSchemas.js`, defining the required input fields and document types. The Mobile PWA automatically renders dynamic input forms ([DynamicServiceForm.jsx](frontend/src/pages/mobile/DynamicServiceForm.jsx)) and multi-document upload vaults ([MultiDocVault.jsx](frontend/src/pages/mobile/MultiDocVault.jsx)), while the Teller Workspace immediately formats the review modal.
 
 ---
 
@@ -579,6 +612,12 @@ frontend/src/
 │   │   └── TellerAccounts.jsx         # Branch accounts management & KYC status list
 │   ├── ocr/
 │   │   └── OcrDemoPage.jsx            # Interactive Gemini 2.5 Flash Vision OCR testing lab
+│   ├── presentation/
+│   │   └── PresentationDeck.jsx       # Interactive slide deck & pitch studio (/presentation, /ppt)
+│   ├── voice/
+│   │   └── VoiceTestPage.jsx          # Real-time voice synthesis & audio testing lab (/voice-lab)
+│   ├── intro/
+│   │   └── IntroPortal.jsx            # Cinematic Torii gate bloom portal entrance (/)
 │   ├── debug/
 │   │   └── AgentDebugConsole.jsx      # Real-time telemetry inspector for agent executions
 │   └── sandbox/
